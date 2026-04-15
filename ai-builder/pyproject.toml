@@ -1,0 +1,82 @@
+[project]
+name = "ai-builder"
+version = "0.1.0"
+description = "Lightweight CLI framework for building composable AI tools, agents, and pipelines"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+keywords = ["ai", "agents", "rag", "pipeline", "llm", "langchain", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "typer>=0.15",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Built-in tools: document processing
+docs = [
+    "pdfplumber>=0.11",
+    "python-docx>=1.1",
+    "python-pptx>=1.0",
+    "beautifulsoup4>=4.12",
+    "striprtf>=0.0.26",
+]
+# Built-in tools: embeddings + vector store
+rag = [
+    "sentence-transformers>=3.3",
+    "faiss-cpu>=1.9",
+    "langchain-text-splitters>=0.3",
+]
+# LLM providers
+llm = ["openai>=1.0", "anthropic>=0.40"]
+# Agent frameworks
+agents = [
+    "langchain>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-anthropic>=0.3",
+    "langchain-community>=0.3",
+    "langgraph>=0.2",
+]
+# Tracing / observability
+tracing = ["langfuse>=2.0"]
+# Web dashboard
+serve = ["fastapi>=0.115", "uvicorn[standard]>=0.34"]
+# Vector DB alternatives
+chroma = ["chromadb>=0.5"]
+qdrant = ["qdrant-client>=1.12"]
+# Web search
+search = ["tavily-python>=0.5"]
+# Everything
+all = [
+    "ai-builder[docs,rag,llm,agents,tracing,serve,chroma,qdrant,search]",
+]
+dev = ["pytest>=8.0", "ruff>=0.8"]
+
+[project.urls]
+Homepage = "https://github.com/rohaanuv/ai-builder"
+Repository = "https://github.com/rohaanuv/ai-builder"
+Issues = "https://github.com/rohaanuv/ai-builder/issues"
+
+[project.scripts]
+ai-builder = "ai_builder.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
