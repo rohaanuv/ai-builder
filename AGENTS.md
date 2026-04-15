@@ -102,3 +102,7 @@ Tracer.configure(backend="langfuse", public_key="pk-...", secret_key="sk-...")
 5. **Deployment-ready** — every scaffold includes Dockerfile, docker-compose.yml, and k8s/ manifests
 6. **Minimal deps** — core framework needs only typer, rich, pydantic, pyyaml. Heavy deps (torch, langchain) are optional extras
 7. **uv-native** — all projects use `pyproject.toml` compatible with `uv sync`
+
+## License
+
+**AGPL-3.0** — If you modify this source code, you **must** make your changes available under the same license and push them to a public repository. Network use counts as distribution. See [LICENSE](LICENSE).

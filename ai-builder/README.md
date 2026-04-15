@@ -602,4 +602,6 @@ ai-builder/                        # The framework itself
 
 ## License
 
-MIT
+[GNU Affero General Public License v3.0 (AGPL-3.0)](../LICENSE)
+
+You are free to use, modify, and distribute this software. If you modify the source code, you **must** make your changes available under the same license and push them to a public repository. If you run a modified version as a network service, you must provide the source to your users. This ensures all improvements benefit the community.
