@@ -67,153 +67,169 @@ pydantic>=2.0
     _write(target / ".env", f"""\
 # {name} configuration
 PROJECT_NAME={name}
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-TAVILY_API_KEY=
-MODEL_NAME=gpt-4o-mini
-MAX_ITERATIONS=5
 LOG_LEVEL=INFO
+
+# LLM (set after installing langchain extras)
+# OPENAI_API_KEY=
+# ANTHROPIC_API_KEY=
+# TAVILY_API_KEY=
+# MODEL_NAME=gpt-4o-mini
+# MAX_ITERATIONS=5
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
+\"\"\"
+{name} — multi-agent deep research system built with ai-builder.
+
+Quick start (works immediately):
+
+    from {pkg} import agent
+    result = agent.run("Research topic X")
+    print(result.response)
+
+Full LLM-powered multi-agent system (after installing extras):
+
+    uv pip install -e ".[langchain]"
+    # See examples/langchain_deep.py
+\"\"\"
+
 from {pkg}.main import agent, {cls}
 
 __all__ = ["agent", "{cls}"]
 """)
 
+    # ── main.py — hello-world multi-agent with AgentBus, no LLM ──
     _write(target / "src" / pkg / "main.py", f"""\
 \"\"\"
 {name} — multi-agent deep research system.
 
+This hello-world demonstrates the multi-agent communication pattern
+using AgentBus — no LLM or API keys needed.
+
 Architecture:
     Supervisor → [Researcher, Analyst, Writer]
 
-Sub-agents communicate via the AgentBus. The supervisor routes queries,
-the researcher gathers information, the analyst extracts insights,
-and the writer produces the final report.
+    python -m {pkg}.main
 
-Usage:
-    from {pkg} import agent
-    result = agent.run("Research the latest trends in AI agents")
+To build the full LLM-powered system:
+
+    uv pip install -e ".[langchain]"
+    echo "OPENAI_API_KEY=sk-..." >> .env
+    python examples/langchain_deep.py
 \"\"\"
 
-from typing import Any, Literal
-
 from ai_builder.core.agent import BaseAgent, AgentInput, AgentOutput
-from ai_builder.core.communication import AgentBus, AgentMessage, AgentCard
-from {pkg}.config import {cls}Config
+from ai_builder.core.communication import AgentBus, AgentMessage
+
+
+class ResearcherAgent(BaseAgent):
+    name = "researcher"
+    description = "Gathers information on a topic"
+
+    def build_graph(self):
+        return None
+
+    def invoke(self, inp: AgentInput) -> AgentOutput:
+        return AgentOutput(
+            response=(
+                f"Research findings on '{{inp.query}}':\\n"
+                "1. This is a significant area of study.\\n"
+                "2. Recent developments show promising results.\\n"
+                "3. Multiple approaches have been proposed."
+            ),
+        )
+
+
+class AnalystAgent(BaseAgent):
+    name = "analyst"
+    description = "Extracts insights from research"
+
+    def build_graph(self):
+        return None
+
+    def invoke(self, inp: AgentInput) -> AgentOutput:
+        return AgentOutput(
+            response=(
+                "Key insights:\\n"
+                "- The field is rapidly evolving.\\n"
+                "- Practical applications are emerging.\\n"
+                "- Further investigation is warranted."
+            ),
+        )
+
+
+class WriterAgent(BaseAgent):
+    name = "writer"
+    description = "Produces structured reports"
+
+    def build_graph(self):
+        return None
+
+    def invoke(self, inp: AgentInput) -> AgentOutput:
+        return AgentOutput(
+            response=(
+                "# Research Report\\n\\n"
+                f"## Topic: {{inp.query}}\\n\\n"
+                "Based on our research and analysis, here are the findings...\\n\\n"
+                "(This is a hello-world demo. Install langchain extras for "
+                "LLM-powered research.)"
+            ),
+        )
 
 
 class {cls}(BaseAgent):
+    \"\"\"Supervisor that coordinates the research team via AgentBus.\"\"\"
+
     name = "{name}"
     description = "Multi-agent deep research system with supervisor routing"
 
     def __init__(self) -> None:
-        self.config = {cls}Config()
         self.bus = AgentBus()
+        self.bus.register_agent(ResearcherAgent())
+        self.bus.register_agent(AnalystAgent())
+        self.bus.register_agent(WriterAgent())
 
-    def build_graph(self) -> Any:
-        from langchain_openai import ChatOpenAI
-        from langgraph.graph import StateGraph, START, END
-        from typing import TypedDict, Annotated
-        from langgraph.graph.message import add_messages
-
-        class State(TypedDict):
-            messages: Annotated[list, add_messages]
-            next_agent: str
-            research: str
-            analysis: str
-            draft: str
-
-        llm = ChatOpenAI(model=self.config.model_name, temperature=0.3)
-        creative_llm = ChatOpenAI(model=self.config.model_name, temperature=0.7)
-
-        def supervisor(state: State) -> dict:
-            from langchain_core.messages import SystemMessage
-            sys = SystemMessage(content=(
-                "You are a supervisor routing tasks. Based on the conversation, "
-                "decide which agent should act next: 'researcher', 'analyst', 'writer', or 'FINISH'. "
-                "Respond with ONLY the agent name."
-            ))
-            resp = llm.invoke([sys] + state["messages"])
-            next_step = resp.content.strip().lower()
-            if next_step not in ("researcher", "analyst", "writer"):
-                next_step = "FINISH"
-            return {{"next_agent": next_step}}
-
-        def researcher(state: State) -> dict:
-            from langchain_core.messages import SystemMessage, AIMessage
-            sys = SystemMessage(content=(
-                "You are a research specialist. Gather facts and provide comprehensive findings."
-            ))
-            resp = llm.invoke([sys] + state["messages"])
-            self.bus.broadcast(AgentMessage(
-                sender="researcher", receiver="analyst",
-                content=resp.content, message_type="event",
-            ))
-            return {{
-                "messages": [AIMessage(content=f"[Researcher] {{resp.content}}")],
-                "research": resp.content,
-            }}
-
-        def analyst(state: State) -> dict:
-            from langchain_core.messages import SystemMessage, AIMessage
-            research = state.get("research", "")
-            sys = SystemMessage(content=f"Analyze this research and extract key insights:\\n\\n{{research}}")
-            resp = llm.invoke([sys] + state["messages"])
-            return {{
-                "messages": [AIMessage(content=f"[Analyst] {{resp.content}}")],
-                "analysis": resp.content,
-            }}
-
-        def writer(state: State) -> dict:
-            from langchain_core.messages import SystemMessage, AIMessage
-            analysis = state.get("analysis", "")
-            sys = SystemMessage(content=f"Create a well-structured report from this analysis:\\n\\n{{analysis}}")
-            resp = creative_llm.invoke([sys] + state["messages"])
-            return {{
-                "messages": [AIMessage(content=f"[Writer] {{resp.content}}")],
-                "draft": resp.content,
-            }}
-
-        def route(state: State) -> Literal["researcher", "analyst", "writer", "__end__"]:
-            next_step = state.get("next_agent", "FINISH")
-            return "__end__" if next_step == "FINISH" else next_step
-
-        graph = StateGraph(State)
-        graph.add_node("supervisor", supervisor)
-        graph.add_node("researcher", researcher)
-        graph.add_node("analyst", analyst)
-        graph.add_node("writer", writer)
-
-        graph.add_edge(START, "supervisor")
-        graph.add_conditional_edges("supervisor", route)
-        for n in ("researcher", "analyst", "writer"):
-            graph.add_edge(n, "supervisor")
-
-        return graph.compile()
+    def build_graph(self):
+        return None
 
     def invoke(self, inp: AgentInput) -> AgentOutput:
-        graph = self.build_graph()
-        from langchain_core.messages import HumanMessage
+        # Step 1: Research
+        research_resp = self.bus.send(AgentMessage(
+            sender=self.name, receiver="researcher", content=inp.query,
+        ))
+        research = research_resp.content if research_resp else ""
 
-        result = graph.invoke({{
-            "messages": [HumanMessage(content=inp.query)],
-            "next_agent": "", "research": "", "analysis": "", "draft": "",
-        }})
+        # Step 2: Analyze
+        analyst_resp = self.bus.send(AgentMessage(
+            sender=self.name, receiver="analyst", content=str(research),
+        ))
+        analysis = analyst_resp.content if analyst_resp else ""
 
-        draft = result.get("draft") or result["messages"][-1].content
+        # Step 3: Write report
+        writer_resp = self.bus.send(AgentMessage(
+            sender=self.name, receiver="writer", content=inp.query,
+        ))
+        report = writer_resp.content if writer_resp else ""
+
         return AgentOutput(
-            response=draft,
+            response=str(report),
             metadata={{
-                "model": self.config.model_name,
-                "agents_used": ["supervisor", "researcher", "analyst", "writer"],
-                "bus_history_count": len(self.bus.history),
+                "agents_used": ["researcher", "analyst", "writer"],
+                "bus_messages": len(self.bus.history),
+                "mode": "hello-world",
             }},
         )
 
 
 agent = {cls}()
+
+
+if __name__ == "__main__":
+    query = "the impact of AI agents on software development"
+    print(f"Query: {{query}}\\n")
+    result = agent.run(query)
+    print(result.response)
+    print(f"\\nMetadata: {{result.metadata}}")
 """)
 
     _write(target / "src" / pkg / "config.py", f"""\
@@ -245,6 +261,133 @@ class {cls}Config(BaseConfig):
 Sub-agents communicate via `AgentBus`.
 """)
 
+    # ── examples/langchain_deep.py — full LangGraph multi-agent ──
+    _write(target / "examples" / "langchain_deep.py", f"""\
+\"\"\"
+Full LLM-powered multi-agent deep research system.
+
+Architecture: Supervisor → [Researcher, Analyst, Writer]
+Uses LangGraph StateGraph for agent coordination.
+
+Prerequisites:
+    uv pip install -e ".[langchain]"
+    echo "OPENAI_API_KEY=sk-..." >> .env
+
+Usage:
+    python examples/langchain_deep.py
+\"\"\"
+
+from typing import Any, Literal
+
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
+from langgraph.graph.message import add_messages
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from typing import TypedDict, Annotated
+
+from ai_builder.core.agent import BaseAgent, AgentInput, AgentOutput
+from {pkg}.config import {cls}Config
+
+
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
+    next_agent: str
+    research: str
+    analysis: str
+    draft: str
+
+
+class LangChain{cls}(BaseAgent):
+    name = "{name}"
+    description = "LLM-powered multi-agent deep research system"
+
+    def __init__(self) -> None:
+        self.config = {cls}Config()
+
+    def build_graph(self) -> Any:
+        llm = ChatOpenAI(model=self.config.model_name, temperature=0.3)
+        creative_llm = ChatOpenAI(model=self.config.model_name, temperature=0.7)
+
+        def supervisor(state: State) -> dict:
+            sys = SystemMessage(content=(
+                "You are a supervisor routing tasks. Based on the conversation, "
+                "decide which agent should act next: 'researcher', 'analyst', 'writer', or 'FINISH'. "
+                "Respond with ONLY the agent name."
+            ))
+            resp = llm.invoke([sys] + state["messages"])
+            next_step = resp.content.strip().lower()
+            if next_step not in ("researcher", "analyst", "writer"):
+                next_step = "FINISH"
+            return {{"next_agent": next_step}}
+
+        def researcher(state: State) -> dict:
+            sys = SystemMessage(content=(
+                "You are a research specialist. Gather facts and provide comprehensive findings."
+            ))
+            resp = llm.invoke([sys] + state["messages"])
+            return {{
+                "messages": [AIMessage(content=f"[Researcher] {{resp.content}}")],
+                "research": resp.content,
+            }}
+
+        def analyst(state: State) -> dict:
+            research = state.get("research", "")
+            sys = SystemMessage(content=f"Analyze this research and extract key insights:\\n\\n{{research}}")
+            resp = llm.invoke([sys] + state["messages"])
+            return {{
+                "messages": [AIMessage(content=f"[Analyst] {{resp.content}}")],
+                "analysis": resp.content,
+            }}
+
+        def writer(state: State) -> dict:
+            analysis = state.get("analysis", "")
+            sys = SystemMessage(content=f"Create a well-structured report from this analysis:\\n\\n{{analysis}}")
+            resp = creative_llm.invoke([sys] + state["messages"])
+            return {{
+                "messages": [AIMessage(content=f"[Writer] {{resp.content}}")],
+                "draft": resp.content,
+            }}
+
+        def route(state: State) -> Literal["researcher", "analyst", "writer", "__end__"]:
+            next_step = state.get("next_agent", "FINISH")
+            return "__end__" if next_step == "FINISH" else next_step
+
+        graph = StateGraph(State)
+        graph.add_node("supervisor", supervisor)
+        graph.add_node("researcher", researcher)
+        graph.add_node("analyst", analyst)
+        graph.add_node("writer", writer)
+
+        graph.add_edge(START, "supervisor")
+        graph.add_conditional_edges("supervisor", route)
+        for n in ("researcher", "analyst", "writer"):
+            graph.add_edge(n, "supervisor")
+
+        return graph.compile()
+
+    def invoke(self, inp: AgentInput) -> AgentOutput:
+        graph = self.build_graph()
+        result = graph.invoke({{
+            "messages": [HumanMessage(content=inp.query)],
+            "next_agent": "", "research": "", "analysis": "", "draft": "",
+        }})
+
+        draft = result.get("draft") or result["messages"][-1].content
+        return AgentOutput(
+            response=draft,
+            metadata={{
+                "model": self.config.model_name,
+                "agents_used": ["supervisor", "researcher", "analyst", "writer"],
+            }},
+        )
+
+
+if __name__ == "__main__":
+    agent = LangChain{cls}()
+    result = agent.run("Research the latest trends in AI agents")
+    print(result.response)
+""")
+
     _write(target / "pipeline.yaml", f"""\
 name: {name}
 description: Multi-agent deep research system
@@ -273,27 +416,21 @@ steps:
 
     _write(target / "tests" / "test_agent.py", f"""\
 from {pkg}.main import {cls}
-from ai_builder.core.communication import AgentBus, AgentMessage
+from ai_builder.core.communication import AgentBus
 
 
-def test_agent_creates():
+def test_agent_runs():
     a = {cls}()
-    assert a.name == "{name}"
-    assert a.bus is not None
+    result = a.run("test query")
+    assert result.success
+    assert "Research Report" in result.response
 
 
-def test_bus_communication():
-    bus = AgentBus()
-    received = []
-
-    def handler(msg):
-        received.append(msg)
-        return AgentMessage(sender="b", receiver="a", content="reply", message_type="response")
-
-    bus.register("agent-b", handler)
-    resp = bus.send(AgentMessage(sender="a", receiver="agent-b", content="hello"))
-    assert resp is not None
-    assert resp.content == "reply"
+def test_agent_uses_bus():
+    a = {cls}()
+    result = a.run("test")
+    assert result.metadata["bus_messages"] > 0
+    assert "researcher" in result.metadata["agents_used"]
 """)
 
     _write(target / "Dockerfile", generate_dockerfile(name, pkg))
@@ -308,22 +445,27 @@ def test_bus_communication():
 
 Multi-agent deep research system built with **ai-builder**.
 
-## Architecture
-
-```
-User Query → Supervisor → Researcher → Supervisor → Analyst → Supervisor → Writer → Report
-                 ↑                                                              |
-                 └──────────────────────────────────────────────────────────────┘
-```
-
-Sub-agents communicate via `AgentBus` (Pydantic-typed messages).
-
-## Quick Start
+## Quick Start (works immediately)
 
 ```bash
-uv sync
+source .venv/bin/activate
+python -m {pkg}.main
+```
+
+This runs a hello-world multi-agent system where:
+- **Supervisor** coordinates the team via `AgentBus`
+- **Researcher** gathers information
+- **Analyst** extracts insights
+- **Writer** produces a report
+
+No API keys or extra packages needed.
+
+## Level Up — LLM-Powered Agents
+
+```bash
+uv pip install -e ".[langchain]"
 echo "OPENAI_API_KEY=sk-..." >> .env
-ai-builder run . --query "Research the latest AI trends"
+python examples/langchain_deep.py
 ```
 
 ## Python API
@@ -332,20 +474,19 @@ ai-builder run . --query "Research the latest AI trends"
 from {pkg} import agent
 
 result = agent.run("Research the impact of LLMs on software engineering")
-print(result.response)   # Structured report
-print(result.metadata)   # Which agents were used
+print(result.response)
+print(result.metadata)   # shows which agents were used
 ```
 
 ## Agent-to-Agent Communication
 
 ```python
 from ai_builder.core.communication import AgentBus, AgentMessage
+from {pkg} import agent
 
 bus = AgentBus()
 bus.register_agent(agent)
-bus.register_agent(another_agent)
 
-# Agents can now exchange messages
 response = bus.send(AgentMessage(
     sender="coordinator",
     receiver="{name}",
@@ -353,27 +494,20 @@ response = bus.send(AgentMessage(
 ))
 ```
 
-## Tracing
+## Optional Extras
 
-```python
-from ai_builder.tracing import Tracer
-Tracer.configure(backend="langfuse", public_key="pk-...", secret_key="sk-...")
+```bash
+uv pip install -e ".[langchain]"     # LangChain + LangGraph
+uv pip install -e ".[search]"        # Tavily web search
+uv pip install -e ".[langfuse]"      # tracing
+uv pip install -e ".[all]"           # everything
 ```
-
-## Configuration
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENAI_API_KEY` | — | OpenAI API key |
-| `TAVILY_API_KEY` | — | For web search |
-| `MODEL_NAME` | `gpt-4o-mini` | LLM model |
-| `MAX_ITERATIONS` | `5` | Max supervisor routing cycles |
 
 ## Deploy
 
 ```bash
-docker compose up --build
-kubectl apply -f k8s/
+docker compose up --build         # Docker
+kubectl apply -f k8s/             # Kubernetes
 ```
 
 ## Project Structure
@@ -381,10 +515,12 @@ kubectl apply -f k8s/
 ```
 {name}/
 ├── src/{pkg}/
-│   ├── main.py            # Multi-agent graph (LangGraph)
-│   ├── config.py           # Pydantic settings
-│   ├── tools/              # Custom tools for sub-agents
+│   ├── main.py             # Hello-world multi-agent (works immediately)
+│   ├── config.py
+│   ├── tools/
 │   └── prompts/system.md
+├── examples/
+│   └── langchain_deep.py   # Full LLM-powered multi-agent system
 ├── tests/
 ├── pipeline.yaml
 ├── Dockerfile

@@ -65,46 +65,145 @@ pydantic>=2.0
     _write(target / ".env", f"""\
 # {name} configuration
 PROJECT_NAME={name}
-OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
-MODEL_NAME=gpt-4o-mini
-TEMPERATURE=0.7
 LOG_LEVEL=INFO
 
-# Langfuse (optional)
-# LANGFUSE_PUBLIC_KEY=
-# LANGFUSE_SECRET_KEY=
+# LLM (set after installing langchain extras)
+# OPENAI_API_KEY=
+# ANTHROPIC_API_KEY=
+# MODEL_NAME=gpt-4o-mini
+# TEMPERATURE=0.7
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
+\"\"\"
+{name} — LangChain/LangGraph agent built with ai-builder.
+
+Quick start (works immediately):
+
+    from {pkg} import agent
+    result = agent.run("Hello!")
+    print(result.response)
+
+Full LangChain agent (after installing extras):
+
+    uv pip install -e ".[langchain]"
+    # See examples/langchain_agent.py
+\"\"\"
+
 from {pkg}.main import agent, {cls}
 
 __all__ = ["agent", "{cls}"]
 """)
 
+    # ── main.py — hello-world agent, no LangChain needed ──
     _write(target / "src" / pkg / "main.py", f"""\
 \"\"\"
-{name} — LangChain/LangGraph agent with tool calling.
+{name} — agent built with ai-builder.
+
+This hello-world agent works immediately with zero optional packages.
+It echoes your query and demonstrates the BaseAgent + AgentBus pattern.
+
+    python -m {pkg}.main
+
+To build a real LLM-powered agent with LangChain/LangGraph:
+
+    uv pip install -e ".[langchain]"
+    echo "OPENAI_API_KEY=sk-..." >> .env
+    python examples/langchain_agent.py
+\"\"\"
+
+from ai_builder.core.agent import BaseAgent, AgentInput, AgentOutput
+from ai_builder.core.communication import AgentBus, AgentMessage
+
+
+class {cls}(BaseAgent):
+    name = "{name}"
+    description = "Hello-world agent (install langchain extras for LLM support)"
+
+    def build_graph(self):
+        return None
+
+    def invoke(self, inp: AgentInput) -> AgentOutput:
+        return AgentOutput(
+            response=(
+                f"Hello! You asked: {{inp.query}}\\n\\n"
+                "This is the hello-world agent. To enable LLM-powered responses:\\n"
+                "  uv pip install -e \\".[langchain]\\"\\n"
+                "  echo \\"OPENAI_API_KEY=sk-...\\" >> .env\\n"
+                "  python examples/langchain_agent.py"
+            ),
+            metadata={{"agent": self.name, "mode": "hello-world"}},
+        )
+
+
+agent = {cls}()
+
+# Demonstrate AgentBus registration
+bus = AgentBus()
+bus.register_agent(agent)
+
+
+if __name__ == "__main__":
+    query = "What is AI?"
+    print(f"Query: {{query}}\\n")
+    result = agent.run(query)
+    print(result.response)
+""")
+
+    _write(target / "src" / pkg / "config.py", f"""\
+from ai_builder.core.config import BaseConfig
+
+
+class {cls}Config(BaseConfig):
+    project_name: str = "{name}"
+    model_name: str = "gpt-4o-mini"
+    temperature: float = 0.7
+    max_tokens: int = 4096
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+""")
+
+    _write(target / "src" / pkg / "tools" / "__init__.py", f"""\
+\"\"\"Custom LangChain tools for {name}. Import and add to _get_tools().\"\"\"
+""")
+
+    _write(target / "src" / pkg / "prompts" / "system.md", f"""\
+# System Prompt for {name}
+
+You are a helpful AI assistant. Answer questions accurately and concisely.
+""")
+
+    # ── examples/langchain_agent.py — full LangGraph agent ──
+    _write(target / "examples" / "langchain_agent.py", f"""\
+\"\"\"
+Full LangChain/LangGraph agent with tool calling.
+
+Prerequisites:
+    uv pip install -e ".[langchain]"
+    echo "OPENAI_API_KEY=sk-..." >> .env
 
 Usage:
-    from {pkg} import agent
-    result = agent.run("What is the capital of France?")
-    print(result.response)
-
-Agent-to-agent communication:
-    from ai_builder.core.communication import AgentBus
-    bus = AgentBus()
-    bus.register_agent(agent)
-    bus.send(AgentMessage(sender="user", receiver="{name}", content="Hello"))
+    python examples/langchain_agent.py
 \"\"\"
 
 from typing import Any
+
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages
+from langchain_core.messages import HumanMessage
 
 from ai_builder.core.agent import BaseAgent, AgentInput, AgentOutput
 from {pkg}.config import {cls}Config
 
 
-class {cls}(BaseAgent):
+class State(TypedDict):
+    messages: Annotated[list, add_messages]
+
+
+class LangChain{cls}(BaseAgent):
     name = "{name}"
     description = "LangChain/LangGraph agent with tool calling"
 
@@ -112,15 +211,6 @@ class {cls}(BaseAgent):
         self.config = {cls}Config()
 
     def build_graph(self) -> Any:
-        from langchain_openai import ChatOpenAI
-        from langgraph.graph import StateGraph, START, END
-        from langgraph.prebuilt import ToolNode
-        from typing import TypedDict, Annotated
-        from langgraph.graph.message import add_messages
-
-        class State(TypedDict):
-            messages: Annotated[list, add_messages]
-
         llm = ChatOpenAI(
             model=self.config.model_name,
             temperature=self.config.temperature,
@@ -153,13 +243,10 @@ class {cls}(BaseAgent):
         return graph.compile()
 
     def _get_tools(self) -> list:
-        \"\"\"LangChain tools. Add custom tools in the tools/ directory.\"\"\"
         return []
 
     def invoke(self, inp: AgentInput) -> AgentOutput:
         graph = self.build_graph()
-        from langchain_core.messages import HumanMessage
-
         messages = [HumanMessage(content=inp.query)]
         result = graph.invoke({{"messages": messages}})
         last_msg = result["messages"][-1]
@@ -170,30 +257,10 @@ class {cls}(BaseAgent):
         )
 
 
-agent = {cls}()
-""")
-
-    _write(target / "src" / pkg / "config.py", f"""\
-from ai_builder.core.config import BaseConfig
-
-
-class {cls}Config(BaseConfig):
-    project_name: str = "{name}"
-    model_name: str = "gpt-4o-mini"
-    temperature: float = 0.7
-    max_tokens: int = 4096
-    openai_api_key: str = ""
-    anthropic_api_key: str = ""
-""")
-
-    _write(target / "src" / pkg / "tools" / "__init__.py", f"""\
-\"\"\"Custom LangChain tools for {name}. Import and add to _get_tools().\"\"\"
-""")
-
-    _write(target / "src" / pkg / "prompts" / "system.md", f"""\
-# System Prompt for {name}
-
-You are a helpful AI assistant. Answer questions accurately and concisely.
+if __name__ == "__main__":
+    agent = LangChain{cls}()
+    result = agent.run("What is the capital of France?")
+    print(result.response)
 """)
 
     _write(target / "pipeline.yaml", f"""\
@@ -222,9 +289,11 @@ from {pkg}.main import {cls}
 from ai_builder.core.communication import AgentBus, AgentMessage
 
 
-def test_agent_creates():
+def test_agent_runs():
     a = {cls}()
-    assert a.name == "{name}"
+    result = a.run("Hello!")
+    assert result.success
+    assert "Hello" in result.response
 
 
 def test_agent_registers_on_bus():
@@ -246,12 +315,22 @@ def test_agent_registers_on_bus():
 
 LangChain/LangGraph agent built with **ai-builder**.
 
-## Quick Start
+## Quick Start (works immediately)
 
 ```bash
-uv sync
+source .venv/bin/activate
+python -m {pkg}.main
+```
+
+This runs a hello-world agent that echoes your query.
+No API keys or extra packages needed.
+
+## Level Up — LLM-Powered Agent
+
+```bash
+uv pip install -e ".[langchain]"
 echo "OPENAI_API_KEY=sk-..." >> .env
-ai-builder run . --query "What is AI?"
+python examples/langchain_agent.py
 ```
 
 ## Python API
@@ -259,7 +338,7 @@ ai-builder run . --query "What is AI?"
 ```python
 from {pkg} import agent
 
-result = agent.run("Explain quantum computing")
+result = agent.run("What is AI?")
 print(result.response)
 ```
 
@@ -268,48 +347,29 @@ print(result.response)
 ```python
 from ai_builder.core.communication import AgentBus, AgentMessage
 from {pkg} import agent
-from other_agent import other
 
 bus = AgentBus()
 bus.register_agent(agent)
-bus.register_agent(other)
 
 response = bus.send(AgentMessage(
-    sender="other-agent",
+    sender="user",
     receiver="{name}",
     content="Analyze this data",
 ))
 print(response.content)
 ```
 
-## Adding Tools
+## Optional Extras
 
-Add LangChain `@tool` functions in `src/{pkg}/tools/`:
-
-```python
-from langchain_core.tools import tool
-
-@tool
-def search_db(query: str) -> str:
-    \"\"\"Search the database.\"\"\"
-    return "results..."
-```
-
-Then register in `main.py`:
-```python
-def _get_tools(self):
-    from {pkg}.tools.my_tool import search_db
-    return [search_db]
-```
-
-## Tracing
-
-```python
-from ai_builder.tracing import Tracer
-Tracer.configure(backend="langfuse", public_key="pk-...", secret_key="sk-...")
+```bash
+uv pip install -e ".[langchain]"     # LangChain + LangGraph
+uv pip install -e ".[langfuse]"      # tracing
+uv pip install -e ".[all]"           # everything
 ```
 
 ## Configuration
+
+Edit `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -329,10 +389,12 @@ kubectl apply -f k8s/             # Kubernetes
 ```
 {name}/
 ├── src/{pkg}/
-│   ├── main.py            # Agent definition (LangGraph)
-│   ├── config.py           # Pydantic settings
-│   ├── tools/              # Custom LangChain tools
-│   └── prompts/system.md   # System prompt
+│   ├── main.py             # Hello-world agent (works immediately)
+│   ├── config.py            # Pydantic settings
+│   ├── tools/               # Custom LangChain tools
+│   └── prompts/system.md    # System prompt
+├── examples/
+│   └── langchain_agent.py   # Full LangGraph agent
 ├── tests/
 ├── pipeline.yaml
 ├── Dockerfile

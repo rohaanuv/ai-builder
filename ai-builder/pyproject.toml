@@ -31,6 +31,8 @@ docs = [
     "python-pptx>=1.0",
     "beautifulsoup4>=4.12",
     "striprtf>=0.0.26",
+    "openpyxl>=3.1",
+    "docx2txt>=0.8",
 ]
 # Built-in tools: embeddings + vector store
 rag = [

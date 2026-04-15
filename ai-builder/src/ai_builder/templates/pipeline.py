@@ -62,49 +62,55 @@ LOG_LEVEL=INFO
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
+\"\"\"
+{name} — data pipeline built with ai-builder.
+
+Quick start (works immediately):
+
+    from {pkg} import pipeline
+    from ai_builder.core.tool import ToolInput
+    result = pipeline.run(ToolInput(data="data/input/"))
+
+For pandas-based processing:
+
+    uv pip install -e ".[pandas]"
+    # See examples/pandas_pipeline.py
+\"\"\"
+
 from {pkg}.main import pipeline
 
 __all__ = ["pipeline"]
 """)
 
+    # ── main.py — hello-world pipeline using stdlib only ──
     _write(target / "src" / pkg / "main.py", f"""\
 \"\"\"
 {name} — data pipeline: source → transform → aggregate → sink.
 
-Usage:
-    ai-builder run . --input data/input/sales.csv
+This hello-world pipeline reads JSON/CSV using Python stdlib,
+transforms and aggregates the data, and writes output — no extra
+packages needed.
+
+    python -m {pkg}.main
+
+For pandas-based processing:
+
+    uv pip install -e ".[pandas]"
+    python examples/pandas_pipeline.py
 \"\"\"
 
-from {pkg}.source import DataSource
-from {pkg}.transform import Transformer
-from {pkg}.aggregate import Aggregator
-from {pkg}.sink import DataSink
-
-source = DataSource()
-transform = Transformer()
-aggregate = Aggregator()
-sink = DataSink()
-
-pipeline = source | transform | aggregate | sink
-""")
-
-    _write(target / "src" / pkg / "config.py", f"""\
+import csv
+import json
 from pathlib import Path
-from ai_builder.core.config import BaseConfig
-
-
-class {cls}Config(BaseConfig):
-    project_name: str = "{name}"
-    input_path: Path = Path("data/input")
-    output_path: Path = Path("data/output")
-""")
-
-    _write(target / "src" / pkg / "source.py", f"""\
-from pathlib import Path
-import pandas as pd
-from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
-from pydantic import Field
 from typing import Any
+
+from pydantic import Field
+
+from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+
+from {pkg}.config import {cls}Config
+
+config = {cls}Config()
 
 
 class SourceOutput(ToolOutput):
@@ -113,26 +119,29 @@ class SourceOutput(ToolOutput):
 
 class DataSource(BaseTool[ToolInput, SourceOutput]):
     name = "source"
-    description = "Read CSV/JSON data files"
+    description = "Read CSV/JSON data files (stdlib — no pandas needed)"
 
     def execute(self, inp: ToolInput) -> SourceOutput:
-        path = Path(inp.data) if inp.data else Path("data/input")
-        files = [path] if path.is_file() else list(path.glob("*.csv")) + list(path.glob("*.json"))
+        path = Path(inp.data) if inp.data else Path(config.input_path)
+        files = [path] if path.is_file() else sorted(
+            list(path.glob("*.csv")) + list(path.glob("*.json"))
+        )
         if not files:
             return SourceOutput(data=[], success=False, error=f"No data files in {{path}}")
 
-        records: list[dict] = []
+        records: list[dict[str, Any]] = []
         for f in files:
-            df = pd.read_csv(f) if f.suffix == ".csv" else pd.read_json(f)
-            records.extend(df.to_dict(orient="records"))
+            if f.suffix == ".csv":
+                with open(f, newline="", encoding="utf-8") as fh:
+                    records.extend(csv.DictReader(fh))
+            elif f.suffix == ".json":
+                raw = json.loads(f.read_text(encoding="utf-8"))
+                if isinstance(raw, list):
+                    records.extend(raw)
+                elif isinstance(raw, dict):
+                    records.append(raw)
 
         return SourceOutput(data=records, metadata={{**inp.metadata, "rows": len(records)}})
-""")
-
-    _write(target / "src" / pkg / "transform.py", f"""\
-from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
-from pydantic import Field
-from typing import Any
 
 
 class TransformOutput(ToolOutput):
@@ -147,16 +156,9 @@ class Transformer(BaseTool[ToolInput, TransformOutput]):
         records = inp.data if isinstance(inp.data, list) else []
         if not records:
             return TransformOutput(data=[], success=False, error="No data to transform")
-        # TODO: implement transformations
+        # TODO: implement your transformations here
         transformed = [r for r in records if r]
         return TransformOutput(data=transformed, metadata={{**inp.metadata, "rows": len(transformed)}})
-""")
-
-    _write(target / "src" / pkg / "aggregate.py", f"""\
-from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
-from pydantic import Field
-from typing import Any
-import pandas as pd
 
 
 class AggregateOutput(ToolOutput):
@@ -171,38 +173,168 @@ class Aggregator(BaseTool[ToolInput, AggregateOutput]):
         records = inp.data if isinstance(inp.data, list) else []
         if not records:
             return AggregateOutput(data={{}}, success=False, error="No data")
-        df = pd.DataFrame(records)
-        summary = {{"rows": len(df), "columns": list(df.columns)}}
-        numeric = df.select_dtypes(include="number")
-        if not numeric.empty:
-            summary["stats"] = numeric.describe().to_dict()
-        return AggregateOutput(data=summary, metadata={{**inp.metadata}})
-""")
 
-    _write(target / "src" / pkg / "sink.py", f"""\
-import json
-from pathlib import Path
-from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
-from {pkg}.config import {cls}Config
+        columns = list(records[0].keys()) if records else []
+        numeric_cols = []
+        for col in columns:
+            try:
+                float(records[0][col])
+                numeric_cols.append(col)
+            except (ValueError, TypeError, KeyError):
+                pass
+
+        summary: dict[str, Any] = {{"rows": len(records), "columns": columns}}
+        for col in numeric_cols:
+            values = [float(r[col]) for r in records if r.get(col) is not None]
+            if values:
+                summary[f"{{col}}_sum"] = sum(values)
+                summary[f"{{col}}_avg"] = sum(values) / len(values)
+                summary[f"{{col}}_min"] = min(values)
+                summary[f"{{col}}_max"] = max(values)
+
+        return AggregateOutput(data=summary, metadata={{**inp.metadata}})
 
 
 class DataSink(BaseTool[ToolInput, ToolOutput]):
     name = "sink"
     description = "Write results to output file"
 
-    def __init__(self) -> None:
-        self.config = {cls}Config()
-
     def execute(self, inp: ToolInput) -> ToolOutput:
-        out_dir = Path(self.config.output_path)
+        out_dir = Path(config.output_path)
         out_dir.mkdir(parents=True, exist_ok=True)
         out_file = out_dir / "output.json"
         out_file.write_text(json.dumps(inp.data, indent=2, default=str))
         return ToolOutput(data=str(out_file), metadata={{**inp.metadata, "output": str(out_file)}})
+
+
+source = DataSource()
+transform = Transformer()
+aggregate = Aggregator()
+sink = DataSink()
+
+pipeline = source | transform | aggregate | sink
+
+
+if __name__ == "__main__":
+    result = pipeline.run(ToolInput(data=str(config.input_path)))
+    if result.success:
+        print(f"Pipeline completed in {{result.total_duration_ms:.0f}}ms")
+        for step in result.steps:
+            print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
+        if result.final_output:
+            print(f"\\nOutput: {{result.final_output.data}}")
+    else:
+        failed = next((s for s in result.steps if not s.success), None)
+        print(f"Pipeline failed at '{{failed.step_name if failed else '?'}}': {{failed.error if failed else '?'}}")
 """)
 
-    _write(target / "data" / "input" / ".gitkeep", "")
+    _write(target / "src" / pkg / "config.py", f"""\
+from pathlib import Path
+from ai_builder.core.config import BaseConfig
+
+
+class {cls}Config(BaseConfig):
+    project_name: str = "{name}"
+    input_path: Path = Path("data/input")
+    output_path: Path = Path("data/output")
+""")
+
+    # ── sample data so first run produces output ──
+    _write(target / "data" / "input" / "sample.json", """\
+[
+  {"name": "Alice", "department": "Engineering", "salary": 95000},
+  {"name": "Bob", "department": "Marketing", "salary": 72000},
+  {"name": "Charlie", "department": "Engineering", "salary": 105000},
+  {"name": "Diana", "department": "Sales", "salary": 68000},
+  {"name": "Eve", "department": "Engineering", "salary": 110000}
+]
+""")
+
     _write(target / "data" / "output" / ".gitkeep", "")
+
+    # ── examples/pandas_pipeline.py ──
+    _write(target / "examples" / "pandas_pipeline.py", f"""\
+\"\"\"
+Data pipeline with pandas-based processing.
+
+Prerequisites:
+    uv pip install -e ".[pandas]"
+
+Usage:
+    python examples/pandas_pipeline.py
+\"\"\"
+
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+from pydantic import Field
+
+from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+
+from {pkg}.config import {cls}Config
+
+config = {cls}Config()
+
+
+class DataFrameOutput(ToolOutput):
+    data: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PandasSource(BaseTool[ToolInput, DataFrameOutput]):
+    name = "pandas-source"
+    description = "Read data using pandas"
+
+    def execute(self, inp: ToolInput) -> DataFrameOutput:
+        path = Path(inp.data) if inp.data else Path(config.input_path)
+        files = [path] if path.is_file() else sorted(
+            list(path.glob("*.csv")) + list(path.glob("*.json"))
+        )
+        frames = []
+        for f in files:
+            df = pd.read_csv(f) if f.suffix == ".csv" else pd.read_json(f)
+            frames.append(df)
+
+        combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+        return DataFrameOutput(data=combined.to_dict(orient="records"))
+
+
+class PandasTransform(BaseTool[ToolInput, DataFrameOutput]):
+    name = "pandas-transform"
+    description = "Transform using pandas"
+
+    def execute(self, inp: ToolInput) -> DataFrameOutput:
+        df = pd.DataFrame(inp.data if isinstance(inp.data, list) else [])
+        # TODO: your pandas transformations here
+        return DataFrameOutput(data=df.to_dict(orient="records"))
+
+
+class PandasAggregate(BaseTool[ToolInput, ToolOutput]):
+    name = "pandas-aggregate"
+    description = "Aggregate using pandas describe()"
+
+    def execute(self, inp: ToolInput) -> ToolOutput:
+        df = pd.DataFrame(inp.data if isinstance(inp.data, list) else [])
+        summary = {{"rows": len(df), "columns": list(df.columns)}}
+        numeric = df.select_dtypes(include="number")
+        if not numeric.empty:
+            summary["stats"] = numeric.describe().to_dict()
+        return ToolOutput(data=summary)
+
+
+if __name__ == "__main__":
+    from ai_builder.core.tool import ToolInput
+
+    pipeline = PandasSource() | PandasTransform() | PandasAggregate()
+    result = pipeline.run(ToolInput(data=str(config.input_path)))
+
+    if result.success:
+        print(f"Pipeline completed in {{result.total_duration_ms:.0f}}ms")
+        import json
+        print(json.dumps(result.final_output.data, indent=2, default=str))
+    else:
+        print(f"Failed: {{result.steps[-1].error}}")
+""")
 
     _write(target / "pipeline.yaml", f"""\
 name: {name}
@@ -229,8 +361,7 @@ steps:
 """)
 
     _write(target / "tests" / "test_pipeline.py", f"""\
-from {pkg}.source import DataSource
-from {pkg}.transform import Transformer
+from {pkg}.main import DataSource, Transformer
 from ai_builder.core.tool import ToolInput
 
 
@@ -245,6 +376,12 @@ def test_transform_passthrough():
     result = t.run(ToolInput(data=[{{"a": 1}}, {{"b": 2}}]))
     assert result.success
     assert len(result.data) == 2
+
+
+def test_pipeline_runs_with_sample():
+    from {pkg} import pipeline
+    result = pipeline.run(ToolInput(data="data/input/"))
+    assert result.success
 """)
 
     _write(target / "Dockerfile", generate_dockerfile(name, pkg))
@@ -259,18 +396,27 @@ def test_transform_passthrough():
 
 Data pipeline built with **ai-builder**.
 
+## Quick Start (works immediately)
+
+```bash
+source .venv/bin/activate
+python -m {pkg}.main
+```
+
+This processes `data/input/sample.json` through the pipeline and writes
+results to `data/output/output.json`. No extra packages needed.
+
 ## Architecture
 
 ```
 data/input/  →  Source  →  Transform  →  Aggregate  →  Sink  →  data/output/
 ```
 
-## Quick Start
+## Level Up — Pandas Processing
 
 ```bash
-uv sync
-cp your-data.csv data/input/
-ai-builder run . --input data/input/your-data.csv
+uv pip install -e ".[pandas]"
+python examples/pandas_pipeline.py
 ```
 
 ## Python API
@@ -283,13 +429,17 @@ result = pipeline.run(ToolInput(data="data/input/"))
 print(f"Completed in {{result.total_duration_ms:.0f}}ms")
 ```
 
-## Visualize
+## Optional Extras
 
 ```bash
-ai-builder visualize .
+uv pip install -e ".[pandas]"        # pandas DataFrames
+uv pip install -e ".[langfuse]"      # tracing
+uv pip install -e ".[all]"           # everything
 ```
 
 ## Configuration
+
+Edit `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -299,8 +449,8 @@ ai-builder visualize .
 ## Deploy
 
 ```bash
-docker compose up --build
-kubectl apply -f k8s/
+docker compose up --build         # Docker
+kubectl apply -f k8s/             # Kubernetes
 ```
 
 ## Project Structure
@@ -308,13 +458,11 @@ kubectl apply -f k8s/
 ```
 {name}/
 ├── src/{pkg}/
-│   ├── main.py            # Pipeline composition
-│   ├── source.py           # Data source tool
-│   ├── transform.py        # Transformation tool
-│   ├── aggregate.py        # Aggregation tool
-│   ├── sink.py             # Output tool
+│   ├── main.py             # Pipeline (stdlib — no pandas needed)
 │   └── config.py
-├── data/input/
+├── examples/
+│   └── pandas_pipeline.py  # Pandas-based version
+├── data/input/sample.json   # Sample data
 ├── data/output/
 ├── tests/
 ├── pipeline.yaml

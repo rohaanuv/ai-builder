@@ -34,6 +34,8 @@ docs = [
     "python-pptx>=1.0",
     "beautifulsoup4>=4.12",
     "striprtf>=0.0.26",
+    "openpyxl>=3.1",
+    "docx2txt>=0.8",
 ]
 llm = ["openai>=1.0", "anthropic>=0.40"]
 chroma = ["chromadb>=0.5"]
@@ -62,7 +64,9 @@ pydantic>=2.0
 # Vector store:    uv pip install faiss-cpu
 # PDF support:     uv pip install pdfplumber
 # DOCX support:    uv pip install python-docx
+# DOC support:     uv pip install docx2txt
 # PPTX support:    uv pip install python-pptx
+# XLSX support:    uv pip install openpyxl
 # HTML parsing:    uv pip install beautifulsoup4
 # RTF support:     uv pip install striprtf
 # OpenAI LLM:     uv pip install openai
@@ -78,161 +82,90 @@ pydantic>=2.0
     _write(target / ".env", f"""\
 # {name} configuration
 PROJECT_NAME={name}
-EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
-VECTOR_PROVIDER=faiss
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
-TOP_K=5
 LOG_LEVEL=INFO
-
-# LLM (optional — for RAG generation step)
-# OPENAI_API_KEY=
-# ANTHROPIC_API_KEY=
-
-# Langfuse tracing (optional)
-# LANGFUSE_PUBLIC_KEY=
-# LANGFUSE_SECRET_KEY=
-# LANGFUSE_HOST=https://cloud.langfuse.com
 """)
 
+    # ── __init__.py ──
     _write(target / "src" / pkg / "__init__.py", f"""\
 \"\"\"
 {name} — RAG pipeline built with ai-builder.
 
-Usage:
-    from {pkg} import ingest, query, pipeline
+Quick start (works immediately — no extra packages needed):
+
+    from {pkg} import ingest
+    ingest()                    # loads data/raw/hello.md, splits, prints chunks
+
+Full RAG (after installing extras):
+
+    uv pip install -e ".[embeddings,faiss]"
+    # See examples/full_rag.py
 \"\"\"
 
-from {pkg}.main import pipeline, ingest, query
+from {pkg}.main import pipeline, ingest
 
-__all__ = ["pipeline", "ingest", "query"]
+__all__ = ["pipeline", "ingest"]
 """)
 
+    # ── main.py — hello-world that works with zero optional deps ──
     _write(target / "src" / pkg / "main.py", f"""\
 \"\"\"
 {name} — RAG pipeline using ai-builder built-in tools.
 
-The pipeline imports pre-built tools and composes them:
-    loader | splitter | embedder | vector_store
+This hello-world demo loads text files and splits them into chunks.
+It works immediately with zero optional packages.
 
-No need to implement tool logic — just configure and run.
+    python -m {pkg}.main
 
-Usage:
-    # CLI
-    ai-builder run .
+To build the full RAG pipeline (embed → store → retrieve → LLM),
+install the optional extras and see examples/full_rag.py:
 
-    # Python
-    from {pkg} import ingest, query
-    ingest("./data/raw/")
-    result = query("What is the main topic?")
+    uv pip install -e ".[embeddings,faiss]"
 \"\"\"
 
-from pathlib import Path
-
+from ai_builder.tools import DocumentLoader, TextSplitter
 from ai_builder.core.tool import ToolInput
-from ai_builder.core.agent import AgentOutput
-from ai_builder.tools import (
-    DocumentLoader, LoaderConfig,
-    TextSplitter, SplitterConfig,
-    Embedder, EmbedderConfig,
-    VectorStoreWriter, VectorStoreConfig,
-    Retriever, RetrieverConfig, RetrieverInput,
-    LLMTool, LLMConfig,
-)
-from ai_builder.tracing import Tracer, traced_pipeline
 
 from {pkg}.config import {cls}Config
 
-# ── Load configuration from .env ──
 config = {cls}Config()
 
-# ── Instantiate built-in tools with project config ──
-loader = DocumentLoader(LoaderConfig(source_dir=str(config.data_dir / "raw")))
+loader = DocumentLoader()
+splitter = TextSplitter()
 
-splitter = TextSplitter(SplitterConfig(
-    chunk_size=config.chunk_size,
-    chunk_overlap=config.chunk_overlap,
-))
-
-embedder = Embedder(EmbedderConfig(model_id=config.embedding_model))
-
-store = VectorStoreWriter(VectorStoreConfig(
-    provider=config.vector_provider,
-    store_path=str(config.vector_store_path),
-    collection_name=config.collection_name,
-))
-
-retriever = Retriever(RetrieverConfig(
-    provider=config.vector_provider,
-    store_path=str(config.vector_store_path),
-    collection_name=config.collection_name,
-    top_k=config.top_k,
-    embedding_model=config.embedding_model,
-))
-
-llm = LLMTool(LLMConfig(
-    provider=config.llm_provider,
-    model=config.llm_model,
-    system_prompt="Answer the question using only the provided context. If unsure, say so.",
-))
-
-# ── Compose the ingestion pipeline ──
-pipeline = loader | splitter | embedder | store
+pipeline = loader | splitter
 
 
-def ingest(source_dir: str | Path = "data/raw/") -> None:
-    \"\"\"Ingest documents into the vector store.\"\"\"
-    Tracer.new_trace(f"{{config.project_name}}:ingest")
-    traced = traced_pipeline(pipeline)
+def ingest(source: str = "data/raw/") -> None:
+    \"\"\"Load documents and split into chunks (hello-world demo).\"\"\"
+    result = pipeline.run(ToolInput(data=source))
 
-    result = traced.run(ToolInput(data=str(source_dir)))
-    Tracer.flush()
-
-    if result.success:
-        print(f"Ingested successfully ({{result.total_duration_ms:.0f}}ms)")
-        for step in result.steps:
-            print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
-    else:
+    if not result.success:
         failed = next((s for s in result.steps if not s.success), None)
-        print(f"Ingestion failed: {{failed.error if failed else 'unknown'}}")
+        print(f"Failed: {{failed.error if failed else 'unknown'}}")
+        return
+
+    chunks = result.final_output.data if result.final_output else []
+    print(f"Loaded and split into {{len(chunks)}} chunks ({{result.total_duration_ms:.0f}}ms)")
+    print()
+    for c in chunks[:5]:
+        preview = c["text"][:120].replace("\\n", " ")
+        print(f"  [{{c['source'].split('/')[-1]}}] {{preview}}...")
+    if len(chunks) > 5:
+        print(f"  ... and {{len(chunks) - 5}} more chunks")
+
+    print()
+    print("Next steps:")
+    print("  uv pip install -e \\".[embeddings,faiss]\\"   # add vector embeddings")
+    print("  python examples/full_rag.py                 # run the full pipeline")
 
 
-def query(question: str, top_k: int | None = None, skip_llm: bool = False) -> AgentOutput:
-    \"\"\"Retrieve relevant chunks and optionally generate an answer.\"\"\"
-    Tracer.new_trace(f"{{config.project_name}}:query")
-
-    k = top_k or config.top_k
-    retrieval_result = retriever.run(RetrieverInput(data=question, metadata={{"top_k": k}}))
-    if not retrieval_result.success:
-        return AgentOutput(response="", success=False, error=retrieval_result.error)
-
-    chunks = retrieval_result.data
-    context = "\\n\\n".join(c.get("text", "") for c in chunks)
-
-    if skip_llm:
-        Tracer.flush()
-        return AgentOutput(
-            response=context,
-            sources=[{{"text": c.get("text", "")[:200], "source": c.get("source", ""),
-                      "score": c.get("score", 0)}} for c in chunks],
-        )
-
-    llm_result = llm.run(ToolInput(data=question, metadata={{"context": context}}))
-    Tracer.flush()
-
-    return AgentOutput(
-        response=llm_result.data if llm_result.success else "",
-        sources=[{{"text": c.get("text", "")[:200], "source": c.get("source", "")}} for c in chunks],
-        success=llm_result.success,
-        error=llm_result.error,
-    )
-
-
-# Module-level reference for `ai-builder run`
-tool = None  # not a single tool
-agent = None
+if __name__ == "__main__":
+    ingest()
 """)
 
+    # ── config.py ──
     _write(target / "src" / pkg / "config.py", f"""\
 from pathlib import Path
 
@@ -246,23 +179,128 @@ class {cls}Config(BaseConfig):
     # Chunking
     chunk_size: int = 1000
     chunk_overlap: int = 200
-
-    # Embedding
-    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-
-    # Vector store
-    vector_provider: str = "faiss"
-    vector_store_path: Path = Path("data/vectorstore")
-    collection_name: str = "default"
-    top_k: int = 5
-
-    # LLM (optional, for generation step)
-    llm_provider: str = "openai"
-    llm_model: str = "gpt-4o-mini"
 """)
 
-    _write(target / "data" / "raw" / ".gitkeep", "")
+    # ── sample data so first run produces output ──
+    _write(target / "data" / "raw" / "hello.md", f"""\
+# Welcome to {name}
 
+This is a sample document included with your new RAG pipeline project.
+It exists so that `python -m {pkg}.main` produces output on first run.
+
+## What is RAG?
+
+Retrieval-Augmented Generation (RAG) is a technique that combines
+information retrieval with text generation. Instead of relying solely
+on a language model's training data, RAG first searches a knowledge
+base for relevant documents, then uses those documents as context
+when generating a response.
+
+## How this project works
+
+1. **Load** — The DocumentLoader reads files from `data/raw/`
+   (supports TXT, MD, PDF, DOCX, DOC, PPTX, HTML, RTF, XLSX, CSV, JSON, XML).
+2. **Split** — The TextSplitter breaks documents into overlapping chunks
+   suitable for embedding.
+3. **Embed** — (optional) The Embedder converts chunks into vector
+   representations using sentence-transformers.
+4. **Store** — (optional) The VectorStoreWriter indexes embeddings
+   in FAISS, Chroma, or Qdrant.
+5. **Retrieve** — (optional) The Retriever finds the most relevant
+   chunks for a given query.
+6. **Generate** — (optional) The LLMTool uses the retrieved context
+   to produce a final answer.
+
+Steps 1-2 work immediately. Steps 3-6 require installing optional
+packages — see the README for details.
+
+## Getting started
+
+Replace this file with your own documents and run:
+
+    python -m {pkg}.main
+
+Or use the CLI:
+
+    ai-builder run . --input data/raw/
+""")
+
+    # ── examples/full_rag.py — full pipeline with embeddings + retrieval ──
+    _write(target / "examples" / "full_rag.py", f"""\
+\"\"\"
+Full RAG pipeline: load → split → embed → store → retrieve → LLM.
+
+Prerequisites:
+    uv pip install -e ".[embeddings,faiss]"
+    # For LLM generation, also: uv pip install -e ".[llm]"
+    # and set OPENAI_API_KEY in .env
+
+Usage:
+    python examples/full_rag.py
+\"\"\"
+
+from pathlib import Path
+
+from ai_builder.core.tool import ToolInput
+from ai_builder.tools import (
+    DocumentLoader,
+    TextSplitter, SplitterConfig,
+    Embedder, EmbedderConfig,
+    VectorStoreWriter, VectorStoreConfig,
+    Retriever, RetrieverConfig, RetrieverInput,
+)
+
+from {pkg}.config import {cls}Config
+
+config = {cls}Config()
+
+# ── Build the ingestion pipeline ──
+loader = DocumentLoader()
+splitter = TextSplitter(SplitterConfig(
+    chunk_size=config.chunk_size,
+    chunk_overlap=config.chunk_overlap,
+))
+embedder = Embedder()
+store = VectorStoreWriter(VectorStoreConfig(
+    store_path=str(config.data_dir / "vectorstore"),
+))
+
+ingest_pipeline = loader | splitter | embedder | store
+
+# ── Build the retriever ──
+retriever = Retriever(RetrieverConfig(
+    store_path=str(config.data_dir / "vectorstore"),
+))
+
+
+def main() -> None:
+    # Ingest
+    print("Ingesting documents from data/raw/ ...")
+    result = ingest_pipeline.run(ToolInput(data="data/raw/"))
+    if not result.success:
+        failed = next((s for s in result.steps if not s.success), None)
+        print(f"Ingestion failed: {{failed.error if failed else 'unknown'}}")
+        return
+    print(f"Ingested in {{result.total_duration_ms:.0f}}ms")
+    for step in result.steps:
+        print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
+
+    # Query
+    question = "What is RAG?"
+    print(f"\\nQuerying: {{question}}")
+    results = retriever.run(RetrieverInput(data=question))
+    if results.success:
+        for i, chunk in enumerate(results.data, 1):
+            print(f"  [{{i}}] (score={{chunk.get('score', 0):.3f}}) {{chunk['text'][:100]}}...")
+    else:
+        print(f"Query failed: {{results.error}}")
+
+
+if __name__ == "__main__":
+    main()
+""")
+
+    # ── pipeline.yaml ──
     _write(target / "pipeline.yaml", f"""\
 name: {name}
 description: "RAG pipeline: load → split → embed → store → retrieve"
@@ -272,7 +310,7 @@ steps:
     type: loader
     config:
       source: data/raw/
-      formats: [txt, md, pdf, docx, pptx, html, rtf]
+      formats: [txt, md, pdf, docx, doc, pptx, html, htm, rtf, xlsx, csv, json, xml]
   - name: splitter
     tool: splitter
     type: splitter
@@ -298,8 +336,8 @@ steps:
       top_k: 5
 """)
 
+    # ── tests ──
     _write(target / "tests" / "test_pipeline.py", f"""\
-from pathlib import Path
 from ai_builder.tools import DocumentLoader, TextSplitter
 from ai_builder.core.tool import ToolInput
 
@@ -317,10 +355,10 @@ def test_splitter_chunks():
     assert len(result.data) > 1
 
 
-def test_pipeline_import():
+def test_pipeline_runs():
     from {pkg} import pipeline
     assert pipeline is not None
-    assert len(pipeline.steps) == 4
+    assert len(pipeline.steps) == 2
 """)
 
     # ── Deployment files ──
@@ -337,94 +375,68 @@ def test_pipeline_import():
 
 RAG (Retrieval-Augmented Generation) pipeline built with **ai-builder**.
 
-## Architecture
-
-```
-data/raw/  →  DocumentLoader  →  TextSplitter  →  Embedder  →  VectorStore
-                                                                    ↓
-                                                Query  →  Retriever  →  LLM  →  Answer
-```
-
-All tools are imported from `ai_builder.tools` — no custom tool code needed.
-Configuration lives in `.env` and `{pkg}/config.py`.
-
-## Quick Start
+## Quick Start (works immediately)
 
 ```bash
-# 1. Install dependencies
-uv sync
-
-# 2. Add documents
-cp your-docs/* data/raw/
-
-# 3. Ingest (embed + index)
-ai-builder run . --input data/raw/
-
-# 4. Query
-python -c "from {pkg} import query; print(query('What is this about?').response)"
+source .venv/bin/activate
+python -m {pkg}.main
 ```
 
-## Python API
+This loads `data/raw/hello.md`, splits it into chunks, and prints them.
+No extra packages needed.
 
-```python
-from {pkg} import ingest, query
+## Level Up — Full RAG Pipeline
 
-# Ingest documents into the vector store
-ingest("data/raw/")
+```bash
+# Add embeddings + vector store
+uv pip install -e ".[embeddings,faiss]"
 
-# Query with retrieval
-result = query("What are the key findings?")
-print(result.response)
-print(result.sources)
+# Run the full pipeline
+python examples/full_rag.py
+```
 
-# Query without LLM (retrieval only)
-result = query("key findings", skip_llm=True)
+## Add Your Own Documents
+
+Replace `data/raw/hello.md` with your files:
+
+| Format | Extra package needed? |
+|--------|----------------------|
+| TXT, MD, CSV, JSON, XML | No (works out of the box) |
+| PDF | `uv pip install pdfplumber` |
+| DOCX | `uv pip install python-docx` |
+| DOC | `uv pip install docx2txt` |
+| PPTX | `uv pip install python-pptx` |
+| XLSX | `uv pip install openpyxl` |
+| HTML, HTM | `uv pip install beautifulsoup4` |
+| RTF | `uv pip install striprtf` |
+
+Or install all document parsers at once: `uv pip install -e ".[docs]"`
+
+## Optional Extras
+
+```bash
+uv pip install -e ".[embeddings]"    # sentence-transformers
+uv pip install -e ".[faiss]"         # FAISS vector store
+uv pip install -e ".[docs]"          # all document parsers
+uv pip install -e ".[llm]"           # OpenAI + Anthropic
+uv pip install -e ".[langfuse]"      # tracing
+uv pip install -e ".[all]"           # everything
 ```
 
 ## Configuration
 
-Edit `.env` to configure:
+Edit `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | HuggingFace embedding model |
-| `VECTOR_PROVIDER` | `faiss` | Vector DB: `faiss`, `chroma`, `qdrant` |
 | `CHUNK_SIZE` | `1000` | Characters per chunk |
 | `CHUNK_OVERLAP` | `200` | Overlap between chunks |
-| `TOP_K` | `5` | Number of results to retrieve |
-| `OPENAI_API_KEY` | — | For LLM generation step |
-
-## Tracing (Langfuse)
-
-Enable observability by setting Langfuse credentials in `.env`:
-
-```env
-LANGFUSE_PUBLIC_KEY=pk-...
-LANGFUSE_SECRET_KEY=sk-...
-```
-
-Then in your code:
-```python
-from ai_builder.tracing import Tracer
-Tracer.configure(backend="langfuse", public_key="pk-...", secret_key="sk-...")
-```
-
-## Visualize
-
-```bash
-ai-builder visualize .   # Opens interactive flow diagram in browser
-```
 
 ## Deploy
 
-### Docker
 ```bash
-docker compose up --build
-```
-
-### Kubernetes
-```bash
-kubectl apply -f k8s/
+docker compose up --build         # Docker
+kubectl apply -f k8s/             # Kubernetes
 ```
 
 ## Project Structure
@@ -432,30 +444,17 @@ kubectl apply -f k8s/
 ```
 {name}/
 ├── src/{pkg}/
-│   ├── __init__.py
-│   ├── main.py          # Pipeline composition (imports built-in tools)
-│   └── config.py         # Pydantic settings from .env
-├── data/raw/              # Input documents
-├── data/vectorstore/      # FAISS index (generated)
-├── pipeline.yaml          # Flow definition (for visualization)
+│   ├── main.py            # Hello-world pipeline (loader + splitter)
+│   └── config.py           # Pydantic settings from .env
+├── examples/
+│   └── full_rag.py         # Full pipeline (embed + store + retrieve)
+├── data/raw/hello.md        # Sample document
+├── pipeline.yaml
 ├── tests/
 ├── Dockerfile
 ├── docker-compose.yml
-├── k8s/                   # Kubernetes manifests
+├── k8s/
 ├── .env
-├── requirements.txt
 └── pyproject.toml
 ```
-
-## Supported Document Formats
-
-PDF, DOCX, PPTX, TXT, MD, HTML, RTF, CSV, JSON
-
-## Vector Store Providers
-
-| Provider | Local | Setup |
-|----------|-------|-------|
-| **FAISS** | Yes | Default, no server needed |
-| **Chroma** | Yes/Remote | `pip install chromadb` |
-| **Qdrant** | Remote | `pip install qdrant-client` |
 """)
