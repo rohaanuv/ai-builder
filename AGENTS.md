@@ -11,7 +11,7 @@ A **lightweight Python CLI framework** for building composable AI tools, agents,
 ## Install from GitHub
 
 ```bash
-pip install git+https://github.com/rohaanuv/ai-builder.git
+pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 ai-builder create rag my-project
 cd my-project && uv venv && uv pip install -e "."
 ```

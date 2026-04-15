@@ -13,10 +13,10 @@ No heavy IDE. No Docker for development. Just Python + Pydantic + `uv`.
 
 ```bash
 # From GitHub
-pip install git+https://github.com/rohaanuv/ai-builder.git
+pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 
 # With extras
-pip install "ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git"
+pip install "ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 ```
 
 ## Create a Project

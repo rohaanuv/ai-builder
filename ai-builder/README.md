@@ -5,7 +5,7 @@ Lightweight Python CLI framework for building **composable AI tools, agents, and
 No heavy IDE. No Docker for development. Just Python + Pydantic + `uv`.
 
 ```bash
-pip install git+https://github.com/rohaanuv/ai-builder.git
+pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 ai-builder create rag my-search
 cd my-search && uv sync
 ```
@@ -49,20 +49,20 @@ cd my-search && uv sync
 
 ```bash
 # With pip
-pip install git+https://github.com/rohaanuv/ai-builder.git
+pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 
 # With uv
-uv pip install git+https://github.com/rohaanuv/ai-builder.git
+uv pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 
 # With extras (e.g. RAG tools, LLM providers)
-pip install "ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git"
+pip install "ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 ```
 
 ### Install from source (for contributors)
 
 ```bash
 git clone https://github.com/rohaanuv/ai-builder.git
-cd ai-builder
+cd ai-builder/ai-builder
 uv venv --python 3.12 .venv
 source .venv/bin/activate
 uv pip install -e ".[all,dev]"
@@ -86,7 +86,7 @@ Here's the complete flow when you start a brand new project on a fresh machine:
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 2. Install ai-builder from GitHub
-uv pip install git+https://github.com/rohaanuv/ai-builder.git
+uv pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
 
 # 3. Verify installation
 ai-builder version
@@ -128,12 +128,12 @@ Add it to your project's `pyproject.toml`:
 ```toml
 [project]
 dependencies = [
-    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git",
+    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
 ]
 
 # Or with extras:
 dependencies = [
-    "ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git",
+    "ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
 ]
 ```
 
@@ -142,9 +142,9 @@ Then `uv sync` or `pip install -e .` will pull it automatically.
 ### In a requirements.txt
 
 ```
-git+https://github.com/rohaanuv/ai-builder.git
+ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
 # or with extras:
-ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git
+ai-builder[rag,llm] @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
 ```
 
 ### Optional extras
