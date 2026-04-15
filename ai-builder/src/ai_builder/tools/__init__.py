@@ -1,13 +1,20 @@
 """
 ai_builder.tools — built-in reusable tool library.
 
-These tools follow the BaseTool[Input, Output] pattern and can be composed
-via the | operator into pipelines.
+Each tool lives in its own package with clearly defined Input → Output schemas:
+
+    loader/       LoaderInput → LoaderOutput         (document loading)
+    splitter/     ToolInput   → SplitterOutput       (text chunking)
+    embedder/     ToolInput   → EmbedderOutput       (vector embeddings)
+    vector_store/ ToolInput   → ToolOutput           (index writing)
+    retriever/    RetrieverInput → RetrieverOutput    (similarity search)
+    llm/          LLMInput    → LLMOutput            (text generation)
+    web_search/   WebSearchInput → WebSearchOutput   (web search)
 
 Usage:
-    from ai_builder.tools import DocumentLoader, TextSplitter, Embedder, VectorStore, Retriever
+    from ai_builder.tools import DocumentLoader, TextSplitter, Embedder
 
-    ingest_pipeline = DocumentLoader() | TextSplitter() | Embedder() | VectorStore()
+    ingest_pipeline = DocumentLoader() | TextSplitter() | Embedder()
     result = ingest_pipeline.run(ToolInput(data="./docs/"))
 """
 

@@ -28,14 +28,21 @@ ai-builder/src/ai_builder/
 │   ├── pipeline.py    # Pipeline: sequential tool composition
 │   ├── config.py      # BaseConfig (pydantic-settings, .env)
 │   └── communication.py  # AgentBus, AgentMessage (A2A)
-├── tools/             # Built-in reusable tool library
-│   ├── loader.py      # Document loader (PDF, DOCX, TXT, MD, HTML, ...)
-│   ├── splitter.py    # Recursive text chunking with IDs
-│   ├── embedder.py    # sentence-transformers embeddings
-│   ├── vector_store.py # FAISS / Chroma / Qdrant
-│   ├── retriever.py   # Vector similarity search
-│   ├── llm.py         # OpenAI / Anthropic / Ollama
-│   └── web_search.py  # Tavily search
+├── tools/             # Built-in reusable tool library (one package per tool)
+│   ├── loader/        # Document loader (PDF, DOCX, TXT, MD, HTML, XLSX, ...)
+│   │   ├── __init__.py, main.py, config.py
+│   ├── splitter/      # Recursive text chunking with IDs
+│   │   ├── __init__.py, main.py, config.py
+│   ├── embedder/      # sentence-transformers embeddings
+│   │   ├── __init__.py, main.py, config.py
+│   ├── vector_store/  # FAISS / Chroma / Qdrant
+│   │   ├── __init__.py, main.py, config.py
+│   ├── retriever/     # Vector similarity search
+│   │   ├── __init__.py, main.py, config.py
+│   ├── llm/           # OpenAI / Anthropic / Ollama
+│   │   ├── __init__.py, main.py, config.py
+│   └── web_search/    # Tavily search
+│       ├── __init__.py, main.py, config.py
 ├── tracing/           # Observability (Langfuse integration)
 ├── deploy/            # Dockerfile, docker-compose, K8s generators
 ├── templates/         # 5 scaffold generators
@@ -53,6 +60,8 @@ ai-builder create agent-deep <name>       # Multi-agent research system
 ai-builder create rag <name>              # RAG pipeline (built-in tools)
 ai-builder create pipeline <name>         # Data pipeline (source→transform→sink)
 
+ai-builder add                            # List available built-in tools
+ai-builder add <tool>                     # Add a tool on demand + install deps
 ai-builder run <path>                     # Execute a tool/agent/pipeline
 ai-builder visualize <path>               # Generate flow diagram → browser
 ai-builder serve <path>                   # Live web dashboard

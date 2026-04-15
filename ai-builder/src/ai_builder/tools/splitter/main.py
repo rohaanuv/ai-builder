@@ -1,4 +1,4 @@
-"""Text splitter — chunks documents with configurable size and overlap."""
+"""TextSplitter — chunks documents with configurable size and overlap."""
 
 from __future__ import annotations
 
@@ -6,25 +6,12 @@ import hashlib
 import logging
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+from ai_builder.tools.splitter.config import SplitterConfig
 
 logger = logging.getLogger(__name__)
-
-
-class SplitterConfig(BaseModel):
-    """Configuration for text splitting."""
-
-    chunk_size: int = Field(default=1000, ge=100, le=10_000, description="Characters per chunk")
-    chunk_overlap: int = Field(default=200, ge=0, le=2000, description="Overlap between chunks")
-    separators: list[str] = Field(
-        default=["\n\n", "\n", ". ", " ", ""],
-        description="Split separators in priority order",
-    )
-    add_chunk_ids: bool = Field(default=True, description="Generate deterministic chunk IDs")
-
-    model_config = {"extra": "allow"}
 
 
 class SplitterOutput(ToolOutput):
@@ -80,9 +67,9 @@ class TextSplitter(BaseTool[ToolInput, SplitterOutput]):
         overlap = self.config.chunk_overlap
         seps = self.config.separators
 
-        # Try LangChain splitter if available, else fallback
         try:
             from langchain_text_splitters import RecursiveCharacterTextSplitter
+
             splitter = RecursiveCharacterTextSplitter(
                 chunk_size=size, chunk_overlap=overlap, separators=seps,
             )
@@ -90,7 +77,6 @@ class TextSplitter(BaseTool[ToolInput, SplitterOutput]):
         except ImportError:
             pass
 
-        # Simple fallback
         chunks = []
         start = 0
         while start < len(text):
@@ -103,3 +89,6 @@ class TextSplitter(BaseTool[ToolInput, SplitterOutput]):
     def _make_id(source: str, index: int, text: str) -> str:
         content = f"{source}::{index}::{text[:200]}"
         return hashlib.sha256(content.encode()).hexdigest()[:16]
+
+
+tool = TextSplitter()

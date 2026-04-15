@@ -1,34 +1,15 @@
-"""Vector store — indexes embeddings with pluggable backends (FAISS, Chroma, Qdrant)."""
+"""VectorStoreWriter — indexes embeddings with pluggable backends (FAISS, Chroma, Qdrant)."""
 
 from __future__ import annotations
 
 import json
 import logging
 from pathlib import Path
-from typing import Any, Literal
-
-from pydantic import BaseModel, Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+from ai_builder.tools.vector_store.config import VectorStoreConfig
 
 logger = logging.getLogger(__name__)
-
-
-class VectorStoreConfig(BaseModel):
-    """Configuration for the vector store."""
-
-    provider: Literal["faiss", "chroma", "qdrant"] = Field(
-        default="faiss", description="Vector database backend",
-    )
-    store_path: str = Field(default="data/vectorstore", description="Local path for index files")
-    collection_name: str = Field(default="default", description="Collection / index name")
-
-    # Provider-specific
-    chroma_host: str = Field(default="localhost", description="Chroma server host")
-    chroma_port: int = Field(default=8000, description="Chroma server port")
-    qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant server URL")
-
-    model_config = {"extra": "allow"}
 
 
 class VectorStoreWriter(BaseTool[ToolInput, ToolOutput]):
@@ -140,3 +121,6 @@ class VectorStoreWriter(BaseTool[ToolInput, ToolOutput]):
             data={"indexed": len(chunks), "total": info.points_count, "provider": "qdrant"},
             metadata=meta,
         )
+
+
+tool = VectorStoreWriter()

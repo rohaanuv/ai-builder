@@ -5,30 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+from ai_builder.tools.retriever.config import RetrieverConfig
 
 logger = logging.getLogger(__name__)
-
-
-class RetrieverConfig(BaseModel):
-    """Configuration for the retriever."""
-
-    provider: Literal["faiss", "chroma", "qdrant"] = Field(default="faiss")
-    store_path: str = Field(default="data/vectorstore")
-    collection_name: str = Field(default="default")
-    top_k: int = Field(default=5, ge=1, le=100)
-    embedding_model: str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
-    device: str = Field(default="cpu")
-
-    chroma_host: str = "localhost"
-    chroma_port: int = 8000
-    qdrant_url: str = "http://localhost:6333"
-
-    model_config = {"extra": "allow"}
 
 
 class RetrieverInput(ToolInput):
@@ -61,7 +45,10 @@ class Retriever(BaseTool[RetrieverInput, RetrieverOutput]):
     def encoder(self) -> Any:
         if self._encoder is None:
             from sentence_transformers import SentenceTransformer
-            self._encoder = SentenceTransformer(self.config.embedding_model, device=self.config.device)
+
+            self._encoder = SentenceTransformer(
+                self.config.embedding_model, device=self.config.device,
+            )
         return self._encoder
 
     def execute(self, inp: RetrieverInput) -> RetrieverOutput:
@@ -152,3 +139,6 @@ class Retriever(BaseTool[RetrieverInput, RetrieverOutput]):
             data=results,
             metadata={**meta, "query": query, "provider": "qdrant", "sources": results},
         )
+
+
+tool = Retriever()

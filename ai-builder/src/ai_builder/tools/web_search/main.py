@@ -1,24 +1,17 @@
-"""Web search tool — search the web via Tavily or SerpAPI."""
+"""WebSearchTool — search the web via Tavily or SerpAPI."""
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+from ai_builder.tools.web_search.config import WebSearchConfig
 
 logger = logging.getLogger(__name__)
-
-
-class WebSearchConfig(BaseModel):
-    provider: Literal["tavily", "serpapi"] = Field(default="tavily")
-    api_key: str = Field(default="", description="API key (falls back to env var)")
-    max_results: int = Field(default=5, ge=1, le=20)
-
-    model_config = {"extra": "allow"}
 
 
 class WebSearchInput(ToolInput):
@@ -46,13 +39,19 @@ class WebSearchTool(BaseTool[WebSearchInput, WebSearchOutput]):
 
         if self.config.provider == "tavily":
             return self._search_tavily(query)
-        return WebSearchOutput(data=[], success=False, error=f"Provider {self.config.provider} not yet implemented")
+        return WebSearchOutput(
+            data=[], success=False,
+            error=f"Provider {self.config.provider} not yet implemented",
+        )
 
     def _search_tavily(self, query: str) -> WebSearchOutput:
         try:
             from tavily import TavilyClient
         except ImportError:
-            return WebSearchOutput(data=[], success=False, error="Install tavily-python: pip install tavily-python")
+            return WebSearchOutput(
+                data=[], success=False,
+                error="Install tavily-python: pip install tavily-python",
+            )
 
         key = self.config.api_key or os.getenv("TAVILY_API_KEY", "")
         if not key:
@@ -68,3 +67,6 @@ class WebSearchTool(BaseTool[WebSearchInput, WebSearchOutput]):
         ]
 
         return WebSearchOutput(data=results, metadata={"query": query, "provider": "tavily"})
+
+
+tool = WebSearchTool()

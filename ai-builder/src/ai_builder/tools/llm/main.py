@@ -1,33 +1,17 @@
-"""LLM tool — generate text from a prompt using OpenAI, Anthropic, or Ollama."""
+"""LLMTool — generate text from a prompt using OpenAI, Anthropic, or Ollama."""
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+from ai_builder.tools.llm.config import LLMConfig
 
 logger = logging.getLogger(__name__)
-
-
-class LLMConfig(BaseModel):
-    """Configuration for the LLM tool."""
-
-    provider: Literal["openai", "anthropic", "ollama"] = Field(
-        default="openai", description="LLM provider",
-    )
-    model: str = Field(default="gpt-4o-mini", description="Model identifier")
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=4096, ge=1)
-    system_prompt: str = Field(default="You are a helpful assistant.")
-
-    api_key: str = Field(default="", description="API key (falls back to env var)")
-    base_url: str = Field(default="", description="Custom API base URL (for Ollama, etc.)")
-
-    model_config = {"extra": "allow"}
 
 
 class LLMInput(ToolInput):
@@ -45,7 +29,7 @@ class LLMOutput(ToolOutput):
 class LLMTool(BaseTool[LLMInput, LLMOutput]):
     """
     Generate text using OpenAI, Anthropic, or Ollama. Commonly used as the
-    final step in a RAG pipeline (retriever output → LLM input).
+    final step in a RAG pipeline (retriever output -> LLM input).
     """
 
     name = "llm"
@@ -130,3 +114,6 @@ class LLMTool(BaseTool[LLMInput, LLMOutput]):
             temperature=self.config.temperature,
         )
         return resp.choices[0].message.content or ""
+
+
+tool = LLMTool()

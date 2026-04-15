@@ -1,4 +1,4 @@
-"""Document loader — reads files from a directory with format-specific extractors.
+"""DocumentLoader — reads files from a directory with format-specific extractors.
 
 Supported formats (all extractors use lazy imports so only stdlib is required at
 import time — heavy libraries are loaded on first use of that format):
@@ -19,28 +19,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
+from ai_builder.tools.loader.config import LoaderConfig
 
 logger = logging.getLogger(__name__)
-
-
-class LoaderConfig(BaseModel):
-    """Configuration for the document loader."""
-
-    source_dir: str = Field(default="data/raw", description="Directory to load documents from")
-    supported_formats: list[str] = Field(
-        default=[
-            ".txt", ".md", ".csv", ".json", ".xml",
-            ".pdf", ".docx", ".doc", ".pptx",
-            ".html", ".htm", ".rtf", ".xlsx",
-        ],
-        description="File extensions to process",
-    )
-    recursive: bool = Field(default=True, description="Recurse into subdirectories")
-
-    model_config = {"extra": "allow"}
 
 
 class LoaderInput(ToolInput):
@@ -50,7 +34,7 @@ class LoaderInput(ToolInput):
 
 
 class LoaderOutput(ToolOutput):
-    """Output: list of {text, source, filename, format} dicts."""
+    """Output: list of {text, source, filename, format, chars} dicts."""
 
     data: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -60,7 +44,7 @@ class DocumentLoader(BaseTool[LoaderInput, LoaderOutput]):
     Load and extract text from documents.
 
     Supports: TXT, MD, CSV, JSON, XML, PDF, DOCX, DOC, PPTX, HTML, HTM,
-    RTF, XLSX.  Heavy libraries (pdfplumber, openpyxl, …) are imported
+    RTF, XLSX.  Heavy libraries (pdfplumber, openpyxl, ...) are imported
     lazily — only when a file of that type is actually processed.
     """
 
@@ -117,31 +101,26 @@ class DocumentLoader(BaseTool[LoaderInput, LoaderOutput]):
     def _extract(path: Path) -> str:
         suffix = path.suffix.lower()
 
-        # ── Plain text (stdlib only) ──
         if suffix in (".txt", ".csv", ".json", ".xml", ".md"):
             return path.read_text(encoding="utf-8", errors="replace")
 
-        # ── PDF ──
         if suffix == ".pdf":
             import pdfplumber
 
             with pdfplumber.open(path) as pdf:
                 return "\n\n".join(p.extract_text() or "" for p in pdf.pages)
 
-        # ── Word DOCX (Open XML) ──
         if suffix == ".docx":
             from docx import Document
 
             doc = Document(str(path))
             return "\n".join(p.text for p in doc.paragraphs)
 
-        # ── Word DOC (legacy binary) ──
         if suffix == ".doc":
             import docx2txt
 
             return docx2txt.process(str(path))
 
-        # ── PowerPoint PPTX ──
         if suffix == ".pptx":
             from pptx import Presentation
 
@@ -153,20 +132,17 @@ class DocumentLoader(BaseTool[LoaderInput, LoaderOutput]):
                         texts.append(shape.text_frame.text)
             return "\n\n".join(texts)
 
-        # ── HTML / HTM ──
         if suffix in (".html", ".htm"):
             from bs4 import BeautifulSoup
 
             html = path.read_text(encoding="utf-8", errors="replace")
             return BeautifulSoup(html, "html.parser").get_text(separator="\n")
 
-        # ── RTF ──
         if suffix == ".rtf":
             from striprtf.striprtf import rtf_to_text
 
             return rtf_to_text(path.read_text(encoding="utf-8", errors="replace"))
 
-        # ── Excel XLSX ──
         if suffix == ".xlsx":
             from openpyxl import load_workbook
 
@@ -181,3 +157,6 @@ class DocumentLoader(BaseTool[LoaderInput, LoaderOutput]):
             return "\n".join(lines)
 
         return ""
+
+
+tool = DocumentLoader()
