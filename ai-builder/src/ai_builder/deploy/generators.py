@@ -6,7 +6,7 @@ from __future__ import annotations
 def generate_dockerfile(name: str, pkg: str, port: int = 8000) -> str:
     return f"""\
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS base
+FROM python:3.13-slim AS base
 
 WORKDIR /app
 

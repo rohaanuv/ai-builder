@@ -2,20 +2,41 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Callable
 
-# Each generator takes (project_name, target_dir) and creates the scaffold.
 GeneratorFn = Callable[[str, Path], None]
 
 TEMPLATE_REGISTRY: dict[str, GeneratorFn] = {}
 
+_PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+_GITIGNORE = """\
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+*.faiss
+*.pkl
+data/vectorstore/
+.ruff_cache/
+.pytest_cache/
+"""
+
 
 def register(name: str) -> Callable[[GeneratorFn], GeneratorFn]:
-    """Decorator to register a template generator."""
+    """Decorator that registers a generator and wraps it to emit common files."""
     def decorator(fn: GeneratorFn) -> GeneratorFn:
-        TEMPLATE_REGISTRY[name] = fn
-        return fn
+        def wrapper(project_name: str, target: Path) -> None:
+            fn(project_name, target)
+            _write(target / ".python-version", _PYTHON_VERSION + "\n")
+            _write(target / ".gitignore", _GITIGNORE)
+        TEMPLATE_REGISTRY[name] = wrapper
+        return wrapper
     return decorator
 
 

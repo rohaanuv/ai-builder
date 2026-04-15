@@ -21,7 +21,7 @@ version = "0.1.0"
 description = "Multi-agent deep research system: {name}"
 requires-python = ">=3.11"
 dependencies = [
-    "ai-builder",
+    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "langchain>=0.3",
     "langchain-openai>=0.3",
     "langchain-anthropic>=0.3",
@@ -44,7 +44,7 @@ build-backend = "setuptools.build_meta"
 """)
 
     _write(target / "requirements.txt", """\
-ai-builder
+ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
 langchain>=0.3
 langchain-openai>=0.3
 langchain-anthropic>=0.3

@@ -21,7 +21,7 @@ version = "0.1.0"
 description = "Data pipeline: {name}"
 requires-python = ">=3.11"
 dependencies = [
-    "ai-builder",
+    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "pandas>=2.2",
     "pydantic>=2.0",
 ]
@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 """)
 
     _write(target / "requirements.txt", """\
-ai-builder
+ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
 pandas>=2.2
 pydantic>=2.0
 ipykernel>=6.29

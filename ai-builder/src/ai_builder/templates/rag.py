@@ -21,7 +21,7 @@ version = "0.1.0"
 description = "RAG pipeline: {name}"
 requires-python = ">=3.11"
 dependencies = [
-    "ai-builder",
+    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "sentence-transformers>=3.3",
     "faiss-cpu>=1.9",
     "pdfplumber>=0.11",
@@ -47,7 +47,7 @@ build-backend = "setuptools.build_meta"
 """)
 
     _write(target / "requirements.txt", """\
-ai-builder
+ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
 sentence-transformers>=3.3
 faiss-cpu>=1.9
 pdfplumber>=0.11
