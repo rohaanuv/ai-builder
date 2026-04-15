@@ -64,7 +64,7 @@ def _scaffold(template_name: str, project_name: str, output_dir: Path | None) ->
 
     install_ok = _run_uv(["pip", "install", "-e", "."], cwd=target)
     if install_ok:
-        console.print("[green]  ✓ Dependencies installed[/green]")
+        console.print("[green]  ✓ Core dependencies installed[/green]")
 
     # --- Done ---
     console.print(f"\n[bold green]Ready![/bold green] Next steps:\n")
@@ -73,6 +73,10 @@ def _scaffold(template_name: str, project_name: str, output_dir: Path | None) ->
     if not install_ok:
         console.print(f"  [cyan]uv pip install -e \".\"[/cyan]")
     console.print()
+    console.print("[dim]Add packages as you need them:[/dim]")
+    console.print("[dim]  uv pip install <package>[/dim]")
+    console.print("[dim]  uv pip install -e \".[all]\"     # install all optional deps[/dim]")
+    console.print("[dim]See requirements.txt for the full list.[/dim]\n")
 
 
 @create_app.command("tool")

@@ -22,21 +22,25 @@ description = "RAG pipeline: {name}"
 requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
-    "sentence-transformers>=3.3",
-    "faiss-cpu>=1.9",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+embeddings = ["sentence-transformers>=3.3"]
+faiss = ["faiss-cpu>=1.9"]
+docs = [
     "pdfplumber>=0.11",
     "python-docx>=1.1",
     "python-pptx>=1.0",
     "beautifulsoup4>=4.12",
     "striprtf>=0.0.26",
 ]
-
-[project.optional-dependencies]
 llm = ["openai>=1.0", "anthropic>=0.40"]
 chroma = ["chromadb>=0.5"]
 qdrant = ["qdrant-client>=1.12"]
 langfuse = ["langfuse>=2.0"]
 dev = ["pytest>=8.0", "ipykernel>=6.29"]
+all = ["{name}[embeddings,faiss,docs,llm,langfuse]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -46,22 +50,29 @@ requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 """)
 
-    _write(target / "requirements.txt", """\
+    _write(target / "requirements.txt", f"""\
+# Core (installed automatically)
 ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
-sentence-transformers>=3.3
-faiss-cpu>=1.9
-pdfplumber>=0.11
-python-docx>=1.1
-python-pptx>=1.0
-beautifulsoup4>=4.12
-striprtf>=0.0.26
-ipykernel>=6.29
-# Optional: uncomment as needed
-# openai>=1.0
-# anthropic>=0.40
-# langfuse>=2.0
-# chromadb>=0.5
-# qdrant-client>=1.12
+pydantic>=2.0
+
+# Add packages as needed — install with: uv pip install <package>
+# Or install a group: uv pip install -e ".[embeddings]"
+#
+# Embeddings:      uv pip install sentence-transformers
+# Vector store:    uv pip install faiss-cpu
+# PDF support:     uv pip install pdfplumber
+# DOCX support:    uv pip install python-docx
+# PPTX support:    uv pip install python-pptx
+# HTML parsing:    uv pip install beautifulsoup4
+# RTF support:     uv pip install striprtf
+# OpenAI LLM:     uv pip install openai
+# Anthropic LLM:  uv pip install anthropic
+# Tracing:        uv pip install langfuse
+# Chroma DB:      uv pip install chromadb
+# Qdrant DB:      uv pip install qdrant-client
+# Notebooks:      uv pip install ipykernel
+#
+# Or install everything at once: uv pip install -e ".[all]"
 """)
 
     _write(target / ".env", f"""\

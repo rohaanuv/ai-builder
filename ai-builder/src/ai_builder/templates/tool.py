@@ -37,10 +37,15 @@ requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 """)
 
-    _write(target / "requirements.txt", """\
+    _write(target / "requirements.txt", f"""\
+# Core (installed automatically)
 ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
 pydantic>=2.0
-ipykernel>=6.29
+
+# Add packages as needed — install with: uv pip install <package>
+#
+# Tracing:    uv pip install langfuse
+# Notebooks:  uv pip install ipykernel
 """)
 
     _write(target / ".env", f"""\

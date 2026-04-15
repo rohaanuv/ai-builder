@@ -22,13 +22,14 @@ description = "Data pipeline: {name}"
 requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
-    "pandas>=2.2",
     "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
+pandas = ["pandas>=2.2"]
 langfuse = ["langfuse>=2.0"]
 dev = ["pytest>=8.0", "ipykernel>=6.29"]
+all = ["{name}[pandas,langfuse]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -38,11 +39,19 @@ requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 """)
 
-    _write(target / "requirements.txt", """\
+    _write(target / "requirements.txt", f"""\
+# Core (installed automatically)
 ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
-pandas>=2.2
 pydantic>=2.0
-ipykernel>=6.29
+
+# Add packages as needed — install with: uv pip install <package>
+# Or install a group: uv pip install -e ".[pandas]"
+#
+# Data processing:  uv pip install pandas
+# Tracing:          uv pip install langfuse
+# Notebooks:        uv pip install ipykernel
+#
+# Or install everything at once: uv pip install -e ".[all]"
 """)
 
     _write(target / ".env", f"""\
