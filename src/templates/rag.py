@@ -28,7 +28,7 @@ from ai_builder.deploy.generators import (
 def generate(name: str, target: Path, *, choices: RagScaffoldChoices | None = None) -> None:
     pkg = _to_snake(name)
     cls = "".join(w.capitalize() for w in name.split("-"))
-    vp, ds, qu = config_defaults_for_template(choices)
+    vp, ds, qu, em = config_defaults_for_template(choices)
 
     _write(target / "pyproject.toml", render_pyproject_toml(name, choices))
     _write(target / "requirements.txt", render_requirements_txt(name, choices))
@@ -179,6 +179,12 @@ class {cls}Config(BaseConfig):
     # Vector store — faiss/chroma/qdrant implemented in ai-builder; others need custom indexing
     vector_provider: str = Field(default="{vp}", description="VECTOR_PROVIDER")
     qdrant_url: str = Field(default="{qu}")
+
+    # sentence-transformers (must match index + query) — see SUPPORTED_MODELS in ai_builder.tools.embeddings.config
+    embedding_model_id: str = Field(
+        default={em!r},
+        description="HuggingFace / ST model id for Embedder and Retriever",
+    )
 """)
 
     # ── sample data so first run produces output ──
@@ -253,6 +259,7 @@ from ai_builder.tools import (
     TextSplitter,
     SplitterConfig,
     Embedder,
+    EmbedderConfig,
     VectorStoreWriter,
     VectorStoreConfig,
     Retriever,
@@ -273,7 +280,7 @@ splitter = TextSplitter(
         chunk_overlap=config.chunk_overlap,
     )
 )
-embedder = Embedder()
+embedder = Embedder(EmbedderConfig(model_id=config.embedding_model_id))
 store = VectorStoreWriter(
     VectorStoreConfig(
         provider=config.vector_provider,  # faiss | chroma | qdrant
@@ -289,6 +296,7 @@ retriever = Retriever(
         provider=config.vector_provider,
         store_path=str(config.data_dir / "vectorstore"),
         qdrant_url=config.qdrant_url,
+        embedding_model=config.embedding_model_id,
     )
 )
 

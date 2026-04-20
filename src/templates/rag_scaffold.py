@@ -5,6 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from ai_builder.tools.embeddings.config import SUPPORTED_MODELS
+from ai_builder.tools.embeddings.registry import (
+    EMBEDDING_EXTRA_BY_MODEL,
+    EMBEDDING_PACKAGES_BY_MODEL,
+)
+
+# Default ST model (first entry in SUPPORTED_MODELS must match EmbedderConfig).
+DEFAULT_EMBEDDING_MODEL_ID: str = next(iter(SUPPORTED_MODELS))
+
 # Keys used in RagScaffoldChoices.formats (subset selected in wizard).
 FORMAT_GROUPS: dict[str, tuple[str, ...]] = {
     "pdf": ("pdfplumber>=0.11",),
@@ -112,6 +121,7 @@ class RagScaffoldChoices:
 
     data_source: DataSourceChoice = "local"
     embedding: EmbeddingChoice = "local"
+    embedding_model_id: str = field(default_factory=lambda: DEFAULT_EMBEDDING_MODEL_ID)
     vector_backend: VectorBackendChoice = "faiss"
     llm: LlmChoice = "none"
     formats: frozenset[str] = field(default_factory=lambda: frozenset(FORMAT_GROUPS))
@@ -125,19 +135,33 @@ class RagScaffoldChoices:
         return cls(
             data_source="local",
             embedding="local",
+            embedding_model_id=DEFAULT_EMBEDDING_MODEL_ID,
             vector_backend="faiss",
             llm="none",
             formats=frozenset(FORMAT_GROUPS),
         )
 
 
+def _embed_model_optional_deps_lines() -> str:
+    """One pyproject optional-extra per sentence-transformers model (minimal pip set)."""
+    lines: list[str] = []
+    for mid in sorted(EMBEDDING_EXTRA_BY_MODEL.keys(), key=lambda m: EMBEDDING_EXTRA_BY_MODEL[m]):
+        extra = EMBEDDING_EXTRA_BY_MODEL[mid]
+        pkgs = EMBEDDING_PACKAGES_BY_MODEL[mid]
+        inner = ", ".join(f'"{p}"' for p in pkgs)
+        lines.append(f"{extra} = [{inner}]")
+    return "\n".join(lines)
+
+
 def _optional_deps_block(project_name: str) -> str:
     """Full optional-dependencies table."""
+    embed_per_model = _embed_model_optional_deps_lines()
     return f'''[project.optional-dependencies]
 notebook = ["ipykernel>=6.29"]
 embeddings-local = ["sentence-transformers>=3.3"]
 embeddings-openai = ["openai>=1.0"]
 embeddings = ["sentence-transformers>=3.3"]
+{embed_per_model}
 faiss = ["faiss-cpu>=1.9"]
 pdf = ["pdfplumber>=0.11"]
 word = ["python-docx>=1.1", "docx2txt>=0.8"]
@@ -209,9 +233,9 @@ build-backend = "setuptools.build_meta"
     return body
 
 
-def _embedding_packages(kind: EmbeddingChoice) -> list[str]:
+def _embedding_packages(kind: EmbeddingChoice, embedding_model_id: str) -> list[str]:
     if kind == "local":
-        return ["sentence-transformers>=3.3"]
+        return list(EMBEDDING_PACKAGES_BY_MODEL.get(embedding_model_id, ("sentence-transformers>=3.3",)))
     if kind == "openai_api":
         return ["openai>=1.0"]
     return []
@@ -248,7 +272,7 @@ def _dedupe_preserve(seq: list[str]) -> list[str]:
 def selected_pip_packages(choices: RagScaffoldChoices) -> list[str]:
     pkgs: list[str] = []
     pkgs.extend(_data_source_packages(choices.data_source))
-    pkgs.extend(_embedding_packages(choices.embedding))
+    pkgs.extend(_embedding_packages(choices.embedding, choices.embedding_model_id))
     pkgs.extend(_vector_backend_packages(choices.vector_backend))
     pkgs.extend(_llm_packages(choices.llm))
     for key in sorted(choices.formats):
@@ -263,7 +287,11 @@ def selected_uv_extras(choices: RagScaffoldChoices) -> list[str]:
     if ds_ex:
         xs.append(ds_ex)
     if choices.embedding == "local":
-        xs.append("embeddings-local")
+        ex = EMBEDDING_EXTRA_BY_MODEL.get(choices.embedding_model_id, "")
+        if ex:
+            xs.append(ex)
+        else:
+            xs.append("embeddings-local")
     elif choices.embedding == "openai_api":
         xs.append("embeddings-openai")
     vs_ex = VECTOR_BACKEND_EXTRA.get(choices.vector_backend, "")
@@ -293,7 +321,7 @@ def render_requirements_txt(project_name: str, choices: RagScaffoldChoices | Non
         lines.extend(
             [
                 "# No interactive profile — pick optional stacks with uv, e.g.:",
-                "#   uv pip install -e \".[embeddings-local,faiss,data-s3,vector-opensearch,pdf]\"",
+                "#   uv pip install -e \".[embed-model-st-all-minilm-l6-v2,faiss,data-s3,vector-opensearch,pdf]\"",
                 "# Document parsers: uv pip install -e \".[docs]\"",
                 "",
             ],
@@ -326,6 +354,9 @@ def render_dot_env_example(project_name: str, choices: RagScaffoldChoices | None
         "CHUNK_SIZE=1000",
         "CHUNK_OVERLAP=200",
         "LOG_LEVEL=INFO",
+        "",
+        "# --- Embeddings (sentence-transformers; Embedder + Retriever in full_rag) ---",
+        f"EMBEDDING_MODEL_ID={c.embedding_model_id}",
         "",
         "# --- Data source (see ai_builder.tools.data_source) ---",
         f"DATA_SOURCE_TYPE={c.data_source}",
@@ -421,9 +452,10 @@ def render_dot_env_example(project_name: str, choices: RagScaffoldChoices | None
     return "\n".join(lines)
 
 
-def config_defaults_for_template(choices: RagScaffoldChoices | None) -> tuple[str, str, str]:
-    """Defaults for generated config.py: vector_provider, data_source_type, qdrant_url."""
+def config_defaults_for_template(choices: RagScaffoldChoices | None) -> tuple[str, str, str, str]:
+    """Defaults for generated config.py: vector_provider, data_source_type, qdrant_url, embedding_model_id."""
     c = choices or RagScaffoldChoices.non_interactive_default()
     vp = c.vector_backend if c.vector_backend != "none" else "faiss"
     ds = c.data_source
-    return vp, ds, "http://localhost:6333"
+    em = c.embedding_model_id
+    return vp, ds, "http://localhost:6333", em

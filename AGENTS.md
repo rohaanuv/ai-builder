@@ -34,8 +34,8 @@ src/                    # flat layout; import name ai_builder via package-dir in
 │   ├── data_source/   # Corpus location → local path or synced temp dir (S3, Azure Blob, GCS, …)
 │   ├── splitter/      # Recursive text chunking with IDs
 │   │   ├── __init__.py, main.py, config.py
-│   ├── embedder/      # sentence-transformers embeddings
-│   │   ├── __init__.py, main.py, config.py
+│   ├── embeddings/    # sentence-transformers Embedder (main/config), presets, rag-scaffold registry
+│   │   ├── __init__.py, main.py, config.py, registry.py, …
 │   ├── vector_store/  # FAISS / Chroma / Qdrant
 │   │   ├── __init__.py, main.py, config.py
 │   ├── retriever/     # Vector similarity search

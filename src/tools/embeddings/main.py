@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import Field
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
-from ai_builder.tools.embedder.config import EmbedderConfig, SUPPORTED_MODELS
+from .config import EmbedderConfig, SUPPORTED_MODELS
 
 logger = logging.getLogger(__name__)
 

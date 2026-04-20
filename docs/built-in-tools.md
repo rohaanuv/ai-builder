@@ -45,6 +45,8 @@ Imports: **`from ai_builder.tools import LocalFilesystemDataSource, S3DataSource
 
 **`Embedder`** uses **sentence-transformers** when installed. Models are selectable via configuration / env (see **`EmbedderConfig`**).
 
+**`ai_builder.tools.embeddings`** exposes one preset **`Embedder`** per supported Hugging Face id (**`TOOLS_BY_MODEL_ID`** / **`get_preset_embedder`**). **`ai-builder create rag`** writes a matching **`embed-model-<slug>`** optional extra in the generated **`pyproject.toml`** so **`uv pip install -e ".[embed-model-…]"`** installs only that model’s pip set ( **`BAAI/bge-m3`** also pulls **`sentencepiece`**).
+
 Requires optional **`sentence-transformers`** (**`ai-builder[embeddings-local]`** or **`[rag]`**). For OpenAI embedding *client* workflows only: **`embeddings-openai`**.
 
 ---

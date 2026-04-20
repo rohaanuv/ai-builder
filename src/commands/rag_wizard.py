@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt
 
 from ai_builder.templates.rag_scaffold import (
+    DEFAULT_EMBEDDING_MODEL_ID,
     FORMAT_GROUPS,
     DataSourceChoice,
     EmbeddingChoice,
@@ -17,6 +18,8 @@ from ai_builder.templates.rag_scaffold import (
     VectorBackendChoice,
     selected_uv_extras,
 )
+from ai_builder.tools.embeddings.config import SUPPORTED_MODELS
+from ai_builder.tools.embeddings.registry import EMBEDDING_EXTRA_BY_MODEL
 
 console = Console(stderr=True)
 
@@ -61,6 +64,37 @@ def _ask_embedding() -> EmbeddingChoice:
     if c == 2:
         return "openai_api"
     return "local"
+
+
+def _ask_embedding_model_id() -> str:
+    """Pick a sentence-transformers model (``SUPPORTED_MODELS`` in ``embeddings.config``)."""
+    models = list(SUPPORTED_MODELS.keys())
+    console.print(
+        Panel.fit(
+            "[bold]Pick exactly one Hugging Face model[/bold] — your generated "
+            "[cyan]pyproject.toml[/cyan] gets a matching optional extra "
+            "(e.g. [green]embed-model-baai-bge-m3[/green]) so "
+            "[cyan]uv pip install -e \".[…]\"[/cyan] installs only that stack.\n\n"
+            "Same id is written to [cyan]EMBEDDING_MODEL_ID[/cyan] in [cyan].env.example[/cyan] "
+            "for [cyan]Embedder[/cyan] / [cyan]Retriever[/cyan].",
+            title="Local embeddings model",
+            border_style="magenta",
+        ),
+    )
+    console.print(
+        "\n[bold]Models[/bold] — [cyan]sentence-transformers[/cyan]\n",
+    )
+    for i, mid in enumerate(models, start=1):
+        meta = SUPPORTED_MODELS[mid]
+        extra = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
+        extra_line = f"\n      [dim]uv extra:[/dim] [green]{extra}[/green]" if extra else ""
+        console.print(
+            f"  {i:2} = [cyan]{mid}[/cyan]{extra_line}\n"
+            f"      [dim]dim={meta['dim']}, max_seq={meta['max_seq']}[/dim]",
+        )
+    c = IntPrompt.ask("Choice", default=1, show_default=True)
+    idx = max(1, min(int(c), len(models))) - 1
+    return models[idx]
 
 
 def _ask_vector_backend() -> VectorBackendChoice:
@@ -149,6 +183,10 @@ def prompt_rag_choices() -> RagScaffoldChoices:
 
     data_source = _ask_data_source()
     embedding = _ask_embedding()
+    if embedding == "local":
+        embedding_model_id = _ask_embedding_model_id()
+    else:
+        embedding_model_id = DEFAULT_EMBEDDING_MODEL_ID
     vector_backend = _ask_vector_backend()
     llm = _ask_llm()
 
@@ -161,6 +199,7 @@ def prompt_rag_choices() -> RagScaffoldChoices:
     choices = RagScaffoldChoices(
         data_source=data_source,
         embedding=embedding,
+        embedding_model_id=embedding_model_id,
         vector_backend=vector_backend,
         llm=llm,
         formats=frozenset(formats),

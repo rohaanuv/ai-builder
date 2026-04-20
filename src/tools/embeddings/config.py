@@ -1,4 +1,4 @@
-"""Configuration for the embedder."""
+"""Configuration for sentence-transformers embeddings."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ SUPPORTED_MODELS = {
     "sentence-transformers/all-mpnet-base-v2": {"dim": 768, "max_seq": 384},
     "BAAI/bge-small-en-v1.5": {"dim": 384, "max_seq": 512},
     "BAAI/bge-base-en-v1.5": {"dim": 768, "max_seq": 512},
+    "BAAI/bge-m3": {"dim": 768, "max_seq": 512},
     "BAAI/bge-large-en-v1.5": {"dim": 1024, "max_seq": 512},
     "thenlper/gte-small": {"dim": 384, "max_seq": 512},
     "thenlper/gte-base": {"dim": 768, "max_seq": 512},

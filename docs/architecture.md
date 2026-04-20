@@ -80,7 +80,7 @@ src/
 ├── tools/
 │   ├── document_loader/
 │   ├── splitter/
-│   ├── embedder/
+│   ├── embeddings/
 │   ├── vector_store/
 │   ├── retriever/
 │   ├── llm/
@@ -98,7 +98,7 @@ src/
 |--------------------------|---------|
 | **`document_loader/`** | Umbrella loader + **`loader_*`** packages + **`common/`** |
 | **`splitter/`** | Recursive text chunking |
-| **`embedder/`** | Embeddings |
+| **`embeddings/`** | Sentence-transformers Embedder + presets / scaffold registry |
 | **`vector_store/`** | FAISS / Chroma / Qdrant writers |
 | **`retriever/`** | Similarity search |
 | **`llm/`** | **`LLMTool`**, **`connectors/`** |

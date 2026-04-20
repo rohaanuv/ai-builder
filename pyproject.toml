@@ -126,7 +126,7 @@ packages = [
     "ai_builder.tools.document_loader.loader_word",
     "ai_builder.tools.document_loader.loader_xml",
     "ai_builder.tools.data_source",
-    "ai_builder.tools.embedder",
+    "ai_builder.tools.embeddings",
     "ai_builder.tools.llm",
     "ai_builder.tools.llm.connectors",
     "ai_builder.tools.retriever",

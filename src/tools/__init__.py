@@ -28,7 +28,12 @@ from ai_builder.tools.document_loader.loader_spreadsheet import SpreadsheetLoade
 from ai_builder.tools.document_loader.loader_text import PlainTextLoader
 from ai_builder.tools.document_loader.loader_word import WordLoader
 from ai_builder.tools.document_loader.loader_xml import XmlLoader
-from ai_builder.tools.embedder import Embedder, EmbedderConfig, EmbedderOutput
+from ai_builder.tools.embeddings import (
+    Embedder,
+    EmbedderConfig,
+    EmbedderOutput,
+    SUPPORTED_MODELS,
+)
 from ai_builder.tools.llm import (
     LLMConfig,
     LLMInput,
@@ -79,6 +84,7 @@ __all__ = [
     "Embedder",
     "EmbedderConfig",
     "EmbedderOutput",
+    "SUPPORTED_MODELS",
     "VectorStoreWriter",
     "VectorStoreConfig",
     "Retriever",
