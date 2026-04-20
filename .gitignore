@@ -36,3 +36,6 @@ data/vectorstore/
 
 # Logs
 *.log
+
+# Optional local uv lock inside ai-builder package checkout
+ai-builder/uv.lock

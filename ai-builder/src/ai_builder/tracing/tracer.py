@@ -186,6 +186,47 @@ class Tracer:
         cls._current_trace_id = ""
 
 
+def configure_tracing_from_env() -> Literal["console", "langfuse"]:
+    """Configure :class:`Tracer` from environment variables for Langfuse observability.
+
+    When ``LANGFUSE_PUBLIC_KEY`` and ``LANGFUSE_SECRET_KEY`` are set, traces are sent to
+    Langfuse. Otherwise spans use the console backend (log output).
+
+    **Environment variables**
+
+    - ``LANGFUSE_PUBLIC_KEY`` / ``LANGFUSE_SECRET_KEY`` — required for Langfuse
+    - ``LANGFUSE_HOST`` — optional (default ``https://cloud.langfuse.com``)
+    - ``LANGFUSE_ENABLED`` — set to ``false`` to force console-only even if keys exist
+    """
+    import os
+
+    if os.getenv("LANGFUSE_ENABLED", "true").strip().lower() in (
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        Tracer.configure(backend="console")
+        return "console"
+
+    pk = os.getenv("LANGFUSE_PUBLIC_KEY", "").strip()
+    sk = os.getenv("LANGFUSE_SECRET_KEY", "").strip()
+    host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com").strip()
+
+    if pk and sk:
+        Tracer.configure(
+            backend="langfuse",
+            public_key=pk,
+            secret_key=sk,
+            host=host,
+        )
+        logger.info("Tracer: Langfuse (from LANGFUSE_* environment variables)")
+        return "langfuse"
+
+    Tracer.configure(backend="console")
+    return "console"
+
+
 def trace(name: str) -> Callable:
     """Decorator: trace a function call as a span."""
     def decorator(fn: Callable) -> Callable:

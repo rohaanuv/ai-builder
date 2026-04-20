@@ -23,13 +23,14 @@ requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "pydantic>=2.0",
+    "ipykernel>=6.29",
+    "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]
 pandas = ["pandas>=2.2"]
-langfuse = ["langfuse>=2.0"]
-dev = ["pytest>=8.0", "ipykernel>=6.29"]
-all = ["{name}[pandas,langfuse]"]
+dev = ["pytest>=8.0"]
+all = ["{name}[pandas]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -48,8 +49,7 @@ pydantic>=2.0
 # Or install a group: uv pip install -e ".[pandas]"
 #
 # Data processing:  uv pip install pandas
-# Tracing:          uv pip install langfuse
-# Notebooks:        uv pip install ipykernel
+# Note: ipykernel + langfuse ship with the default install.
 #
 # Or install everything at once: uv pip install -e ".[all]"
 """)
@@ -59,6 +59,11 @@ PROJECT_NAME={name}
 INPUT_PATH=data/input/
 OUTPUT_PATH=data/output/
 LOG_LEVEL=INFO
+
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
@@ -216,16 +221,23 @@ pipeline = source | transform | aggregate | sink
 
 
 if __name__ == "__main__":
-    result = pipeline.run(ToolInput(data=str(config.input_path)))
-    if result.success:
-        print(f"Pipeline completed in {{result.total_duration_ms:.0f}}ms")
-        for step in result.steps:
-            print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
-        if result.final_output:
-            print(f"\\nOutput: {{result.final_output.data}}")
-    else:
-        failed = next((s for s in result.steps if not s.success), None)
-        print(f"Pipeline failed at '{{failed.step_name if failed else '?'}}': {{failed.error if failed else '?'}}")
+    from ai_builder.tracing import Tracer, configure_tracing_from_env
+
+    configure_tracing_from_env()
+    Tracer.new_trace("{name}-pipeline")
+    try:
+        result = pipeline.run(ToolInput(data=str(config.input_path)))
+        if result.success:
+            print(f"Pipeline completed in {{result.total_duration_ms:.0f}}ms")
+            for step in result.steps:
+                print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
+            if result.final_output:
+                print(f"\\nOutput: {{result.final_output.data}}")
+        else:
+            failed = next((s for s in result.steps if not s.success), None)
+            print(f"Pipeline failed at '{{failed.step_name if failed else '?'}}': {{failed.error if failed else '?'}}")
+    finally:
+        Tracer.flush()
 """)
 
     _write(target / "src" / pkg / "config.py", f"""\
@@ -433,13 +445,12 @@ print(f"Completed in {{result.total_duration_ms:.0f}}ms")
 
 ```bash
 uv pip install -e ".[pandas]"        # pandas DataFrames
-uv pip install -e ".[langfuse]"      # tracing
-uv pip install -e ".[all]"           # everything
+uv pip install -e ".[all]"           # pandas optional extra (Langfuse + ipykernel are default deps)
 ```
 
 ## Configuration
 
-Edit `.env`:
+Edit `.env` — set `LANGFUSE_*` keys to send pipeline traces to Langfuse (optional).
 
 | Variable | Default | Description |
 |----------|---------|-------------|

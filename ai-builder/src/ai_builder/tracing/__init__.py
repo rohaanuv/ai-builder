@@ -21,6 +21,20 @@ Usage:
     Tracer.configure(backend="langfuse", public_key="pk-...", secret_key="sk-...")
 """
 
-from ai_builder.tracing.tracer import Tracer, Span, trace, traced_tool, traced_pipeline
+from ai_builder.tracing.tracer import (
+    Tracer,
+    Span,
+    configure_tracing_from_env,
+    trace,
+    traced_tool,
+    traced_pipeline,
+)
 
-__all__ = ["Tracer", "Span", "trace", "traced_tool", "traced_pipeline"]
+__all__ = [
+    "Tracer",
+    "Span",
+    "configure_tracing_from_env",
+    "trace",
+    "traced_tool",
+    "traced_pipeline",
+]

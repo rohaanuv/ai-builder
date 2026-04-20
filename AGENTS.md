@@ -29,8 +29,7 @@ ai-builder/src/ai_builder/
 │   ├── config.py      # BaseConfig (pydantic-settings, .env)
 │   └── communication.py  # AgentBus, AgentMessage (A2A)
 ├── tools/             # Built-in reusable tool library (one package per tool)
-│   ├── loader/        # Document loader (PDF, DOCX, TXT, MD, HTML, XLSX, ...)
-│   │   ├── __init__.py, main.py, config.py
+│   ├── document_loader/   # Document loaders: common/ + umbrella.py + loader_pdf/, loader_word/, …
 │   ├── splitter/      # Recursive text chunking with IDs
 │   │   ├── __init__.py, main.py, config.py
 │   ├── embedder/      # sentence-transformers embeddings
@@ -39,8 +38,7 @@ ai-builder/src/ai_builder/
 │   │   ├── __init__.py, main.py, config.py
 │   ├── retriever/     # Vector similarity search
 │   │   ├── __init__.py, main.py, config.py
-│   ├── llm/           # OpenAI / Anthropic / Ollama
-│   │   ├── __init__.py, main.py, config.py
+│   ├── llm/           # LLMTool, types, connectors (openai, anthropic, ollama, bedrock, azure, …)
 │   └── web_search/    # Tavily search
 │       ├── __init__.py, main.py, config.py
 ├── tracing/           # Observability (Langfuse integration)

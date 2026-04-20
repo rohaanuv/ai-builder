@@ -17,14 +17,109 @@ UV_BIN = shutil.which("uv")
 
 # ── Tool catalog — each entry describes a built-in tool's contract ──
 
+LOADER_IO = (
+    "LoaderInput(data='path/to/dir')",
+    "LoaderOutput(data=[{text, source, filename, format, chars}])",
+)
+
 TOOL_CATALOG: dict[str, dict[str, Any]] = {
     "loader": {
         "class": "DocumentLoader",
         "import": "from ai_builder.tools import DocumentLoader",
-        "input": "LoaderInput(data='path/to/dir')",
-        "output": "LoaderOutput(data=[{text, source, filename, format, chars}])",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
         "extras": [],
-        "description": "Load documents (TXT/MD/CSV/JSON/XML use stdlib; PDF/DOCX/HTML etc. need optional deps)",
+        "description": "Load all supported document types (install optional deps: uv pip install -e \".[docs]\")",
+        "extras_hint": "docs",
+    },
+    "loader-pdf": {
+        "class": "PdfLoader",
+        "import": "from ai_builder.tools import PdfLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load PDF files only (.pdf)",
+        "extras_hint": "docs",
+    },
+    "loader-word": {
+        "class": "WordLoader",
+        "import": "from ai_builder.tools import WordLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load Word documents (.doc, .docx, .dot, .dotx)",
+        "extras_hint": "docs",
+    },
+    "loader-spreadsheet": {
+        "class": "SpreadsheetLoader",
+        "import": "from ai_builder.tools import SpreadsheetLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load spreadsheets (.csv, .xlsx, .xls)",
+        "extras_hint": "docs",
+    },
+    "loader-text": {
+        "class": "PlainTextLoader",
+        "import": "from ai_builder.tools import PlainTextLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load plain text and Markdown (.txt, .md)",
+        "extras_hint": None,
+    },
+    "loader-rtf": {
+        "class": "RtfLoader",
+        "import": "from ai_builder.tools import RtfLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load RTF files (.rtf)",
+        "extras_hint": "docs",
+    },
+    "loader-slides": {
+        "class": "SlidesLoader",
+        "import": "from ai_builder.tools import SlidesLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load presentation slides (.pptx; legacy .ppt not extracted)",
+        "extras_hint": "docs",
+    },
+    "loader-json": {
+        "class": "JsonLoader",
+        "import": "from ai_builder.tools import JsonLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load JSON files (.json)",
+        "extras_hint": None,
+    },
+    "loader-html": {
+        "class": "HtmlLoader",
+        "import": "from ai_builder.tools import HtmlLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load HTML (.html, .htm)",
+        "extras_hint": "docs",
+    },
+    "loader-xml": {
+        "class": "XmlLoader",
+        "import": "from ai_builder.tools import XmlLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load XML files (.xml)",
+        "extras_hint": None,
+    },
+    "loader-epub": {
+        "class": "EpubLoader",
+        "import": "from ai_builder.tools import EpubLoader",
+        "input": LOADER_IO[0],
+        "output": LOADER_IO[1],
+        "extras": [],
+        "description": "Load EPUB ebooks (.epub)",
         "extras_hint": "docs",
     },
     "splitter": {
@@ -85,6 +180,16 @@ TOOL_CATALOG: dict[str, dict[str, Any]] = {
 
 _DEFAULT_INPUTS: dict[str, str] = {
     "loader": "data/raw",
+    "loader-pdf": "data/raw",
+    "loader-word": "data/raw",
+    "loader-spreadsheet": "data/raw",
+    "loader-text": "data/raw",
+    "loader-rtf": "data/raw",
+    "loader-slides": "data/raw",
+    "loader-json": "data/raw",
+    "loader-html": "data/raw",
+    "loader-xml": "data/raw",
+    "loader-epub": "data/raw",
     "splitter": "[]",
     "embedder": "[]",
     "vector-store": "[]",
@@ -181,7 +286,11 @@ if __name__ == "__main__":
 def add_command(
     tool_name: str = typer.Argument(
         None,
-        help="Built-in tool to add (loader, splitter, embedder, vector-store, retriever, llm, web-search)",
+        help=(
+            "Built-in tool: loader, loader-pdf, loader-word, loader-spreadsheet, loader-text, "
+            "loader-rtf, loader-slides, loader-json, loader-html, loader-xml, loader-epub, "
+            "splitter, embedder, vector-store, retriever, llm, web-search"
+        ),
     ),
 ) -> None:
     """Add a built-in tool to the current project and install its dependencies."""

@@ -33,6 +33,8 @@ docs = [
     "striprtf>=0.0.26",
     "openpyxl>=3.1",
     "docx2txt>=0.8",
+    "xlrd>=2.0",
+    "ebooklib>=0.18",
 ]
 # Built-in tools: embeddings + vector store
 rag = [

@@ -23,6 +23,8 @@ requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "pydantic>=2.0",
+    "ipykernel>=6.29",
+    "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -40,9 +42,8 @@ docs = [
 llm = ["openai>=1.0", "anthropic>=0.40"]
 chroma = ["chromadb>=0.5"]
 qdrant = ["qdrant-client>=1.12"]
-langfuse = ["langfuse>=2.0"]
-dev = ["pytest>=8.0", "ipykernel>=6.29"]
-all = ["{name}[embeddings,faiss,docs,llm,langfuse]"]
+dev = ["pytest>=8.0"]
+all = ["{name}[embeddings,faiss,docs,llm]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -71,12 +72,11 @@ pydantic>=2.0
 # RTF support:     uv pip install striprtf
 # OpenAI LLM:     uv pip install openai
 # Anthropic LLM:  uv pip install anthropic
-# Tracing:        uv pip install langfuse
+# Note: ipykernel + langfuse are in the default install (Jupyter + observability).
 # Chroma DB:      uv pip install chromadb
 # Qdrant DB:      uv pip install qdrant-client
-# Notebooks:      uv pip install ipykernel
 #
-# Or install everything at once: uv pip install -e ".[all]"
+# Or install all optional RAG extras: uv pip install -e ".[all]"
 """)
 
     _write(target / ".env", f"""\
@@ -85,9 +85,17 @@ PROJECT_NAME={name}
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 LOG_LEVEL=INFO
+
+# Langfuse observability — set keys to export traces from pipeline runs (optional)
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
 """)
 
     # ── __init__.py ──
+    # Lazy-load pipeline/ingest so ``python -m {pkg}.main`` does not import ``main`` twice
+    # (avoids RuntimeWarning about test_rag.main in sys.modules).
     _write(target / "src" / pkg / "__init__.py", f"""\
 \"\"\"
 {name} — RAG pipeline built with ai-builder.
@@ -103,10 +111,42 @@ Full RAG (after installing extras):
     # See examples/full_rag.py
 \"\"\"
 
-from {pkg}.main import pipeline, ingest
+from __future__ import annotations
+
+from typing import Any
 
 __all__ = ["pipeline", "ingest"]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "pipeline":
+        from {pkg}.main import pipeline as _pipeline
+
+        return _pipeline
+    if name == "ingest":
+        from {pkg}.main import ingest as _ingest
+
+        return _ingest
+    raise AttributeError(
+        "module " + repr(__name__) + " has no attribute " + repr(name),
+    )
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)
 """)
+
+    _write(
+        target / "src" / pkg / "__main__.py",
+        f"""\
+\"\"\"Entry point: ``python -m {pkg}`` (same as ``python -m {pkg}.main``).\"\"\"
+
+from {pkg}.main import ingest
+
+if __name__ == "__main__":
+    ingest()
+""",
+    )
 
     # ── main.py — hello-world that works with zero optional deps ──
     _write(target / "src" / pkg / "main.py", f"""\
@@ -116,6 +156,7 @@ __all__ = ["pipeline", "ingest"]
 This hello-world demo loads text files and splits them into chunks.
 It works immediately with zero optional packages.
 
+    python -m {pkg}
     python -m {pkg}.main
 
 To build the full RAG pipeline (embed → store → retrieve → LLM),
@@ -126,6 +167,7 @@ install the optional extras and see examples/full_rag.py:
 
 from ai_builder.tools import DocumentLoader, TextSplitter
 from ai_builder.core.tool import ToolInput
+from ai_builder.tracing import Tracer, configure_tracing_from_env
 
 from {pkg}.config import {cls}Config
 
@@ -139,26 +181,32 @@ pipeline = loader | splitter
 
 def ingest(source: str = "data/raw/") -> None:
     \"\"\"Load documents and split into chunks (hello-world demo).\"\"\"
-    result = pipeline.run(ToolInput(data=source))
+    configure_tracing_from_env()
+    Tracer.new_trace("{name}-ingest")
+    try:
+        with Tracer.span("rag.pipeline.run", source=source):
+            result = pipeline.run(ToolInput(data=source))
 
-    if not result.success:
-        failed = next((s for s in result.steps if not s.success), None)
-        print(f"Failed: {{failed.error if failed else 'unknown'}}")
-        return
+        if not result.success:
+            failed = next((s for s in result.steps if not s.success), None)
+            print(f"Failed: {{failed.error if failed else 'unknown'}}")
+            return
 
-    chunks = result.final_output.data if result.final_output else []
-    print(f"Loaded and split into {{len(chunks)}} chunks ({{result.total_duration_ms:.0f}}ms)")
-    print()
-    for c in chunks[:5]:
-        preview = c["text"][:120].replace("\\n", " ")
-        print(f"  [{{c['source'].split('/')[-1]}}] {{preview}}...")
-    if len(chunks) > 5:
-        print(f"  ... and {{len(chunks) - 5}} more chunks")
+        chunks = result.final_output.data if result.final_output else []
+        print(f"Loaded and split into {{len(chunks)}} chunks ({{result.total_duration_ms:.0f}}ms)")
+        print()
+        for c in chunks[:5]:
+            preview = c["text"][:120].replace("\\n", " ")
+            print(f"  [{{c['source'].split('/')[-1]}}] {{preview}}...")
+        if len(chunks) > 5:
+            print(f"  ... and {{len(chunks) - 5}} more chunks")
 
-    print()
-    print("Next steps:")
-    print("  uv pip install -e \\".[embeddings,faiss]\\"   # add vector embeddings")
-    print("  python examples/full_rag.py                 # run the full pipeline")
+        print()
+        print("Next steps:")
+        print("  uv pip install -e \\".[embeddings,faiss]\\"   # add vector embeddings")
+        print("  python examples/full_rag.py                 # run the full pipeline")
+    finally:
+        Tracer.flush()
 
 
 if __name__ == "__main__":
@@ -186,7 +234,7 @@ class {cls}Config(BaseConfig):
 # Welcome to {name}
 
 This is a sample document included with your new RAG pipeline project.
-It exists so that `python -m {pkg}.main` produces output on first run.
+It exists so that `python -m {pkg}` produces output on first run.
 
 ## What is RAG?
 
@@ -218,7 +266,7 @@ packages — see the README for details.
 
 Replace this file with your own documents and run:
 
-    python -m {pkg}.main
+    python -m {pkg}
 
 Or use the CLI:
 
@@ -249,6 +297,7 @@ from ai_builder.tools import (
     VectorStoreWriter, VectorStoreConfig,
     Retriever, RetrieverConfig, RetrieverInput,
 )
+from ai_builder.tracing import Tracer, configure_tracing_from_env
 
 from {pkg}.config import {cls}Config
 
@@ -274,26 +323,31 @@ retriever = Retriever(RetrieverConfig(
 
 
 def main() -> None:
-    # Ingest
-    print("Ingesting documents from data/raw/ ...")
-    result = ingest_pipeline.run(ToolInput(data="data/raw/"))
-    if not result.success:
-        failed = next((s for s in result.steps if not s.success), None)
-        print(f"Ingestion failed: {{failed.error if failed else 'unknown'}}")
-        return
-    print(f"Ingested in {{result.total_duration_ms:.0f}}ms")
-    for step in result.steps:
-        print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
+    configure_tracing_from_env()
+    Tracer.new_trace("{name}-full-rag")
+    try:
+        # Ingest
+        print("Ingesting documents from data/raw/ ...")
+        result = ingest_pipeline.run(ToolInput(data="data/raw/"))
+        if not result.success:
+            failed = next((s for s in result.steps if not s.success), None)
+            print(f"Ingestion failed: {{failed.error if failed else 'unknown'}}")
+            return
+        print(f"Ingested in {{result.total_duration_ms:.0f}}ms")
+        for step in result.steps:
+            print(f"  {{step.step_name}}: {{step.duration_ms:.0f}}ms")
 
-    # Query
-    question = "What is RAG?"
-    print(f"\\nQuerying: {{question}}")
-    results = retriever.run(RetrieverInput(data=question))
-    if results.success:
-        for i, chunk in enumerate(results.data, 1):
-            print(f"  [{{i}}] (score={{chunk.get('score', 0):.3f}}) {{chunk['text'][:100]}}...")
-    else:
-        print(f"Query failed: {{results.error}}")
+        # Query
+        question = "What is RAG?"
+        print(f"\\nQuerying: {{question}}")
+        results = retriever.run(RetrieverInput(data=question))
+        if results.success:
+            for i, chunk in enumerate(results.data, 1):
+                print(f"  [{{i}}] (score={{chunk.get('score', 0):.3f}}) {{chunk['text'][:100]}}...")
+        else:
+            print(f"Query failed: {{results.error}}")
+    finally:
+        Tracer.flush()
 
 
 if __name__ == "__main__":
@@ -361,6 +415,107 @@ def test_pipeline_runs():
     assert len(pipeline.steps) == 2
 """)
 
+    # ── src/tools/ — app imports without ``ai_builder`` prefix (``from tools.llm import …``) ──
+    _write(
+        target / "src" / "tools" / "__init__.py",
+        '''\
+"""Thin re-exports from ai-builder so app code can use ``tools`` as the package root.
+
+Examples::
+
+    from tools.document_loader import loader_rtf, DocumentLoader
+    from tools.llm import connect_openai, connect_azure
+""",
+    )
+
+    _write(
+        target / "src" / "tools" / "document_loader" / "__init__.py",
+        '''\
+"""Document loaders — ``from tools.document_loader import loader_pdf`` etc."""
+
+from ai_builder.tools.document_loader import (
+    DocumentLoader,
+    FormatLoader,
+    LoaderConfig,
+    LoaderInput,
+    LoaderOutput,
+    loader_epub,
+    loader_html,
+    loader_json,
+    loader_pdf,
+    loader_rtf,
+    loader_slides,
+    loader_spreadsheet,
+    loader_text,
+    loader_word,
+    loader_xml,
+)
+
+__all__ = [
+    "DocumentLoader",
+    "FormatLoader",
+    "LoaderConfig",
+    "LoaderInput",
+    "LoaderOutput",
+    "loader_epub",
+    "loader_html",
+    "loader_json",
+    "loader_pdf",
+    "loader_rtf",
+    "loader_slides",
+    "loader_spreadsheet",
+    "loader_text",
+    "loader_word",
+    "loader_xml",
+]
+''',
+    )
+
+    _write(
+        target / "src" / "tools" / "llm" / "__init__.py",
+        '''\
+"""LLM connectors — ``from tools.llm import connect_openai``."""
+
+from ai_builder.tools.llm import (
+    LLMConfig,
+    LLMInput,
+    LLMOutput,
+    LLMTool,
+    connectAnthropic,
+    connectAzure,
+    connectBedrock,
+    connectOllama,
+    connectOpenAI,
+    connectSelfHostedLLM,
+    connect_anthropic,
+    connect_azure,
+    connect_bedrock,
+    connect_ollama,
+    connect_openai,
+    connect_self_hosted_llm,
+)
+
+__all__ = [
+    "LLMConfig",
+    "LLMInput",
+    "LLMOutput",
+    "LLMTool",
+    "connectAnthropic",
+    "connectAzure",
+    "connectBedrock",
+    "connectOllama",
+    "connectOpenAI",
+    "connectSelfHostedLLM",
+    "connect_anthropic",
+    "connect_azure",
+    "connect_bedrock",
+    "connect_ollama",
+    "connect_openai",
+    "connect_self_hosted_llm",
+]
+''',
+    )
+
     # ── Deployment files ──
     _write(target / "Dockerfile", generate_dockerfile(name, pkg))
     _write(target / "docker-compose.yml", generate_docker_compose(name, pkg))
@@ -379,7 +534,7 @@ RAG (Retrieval-Augmented Generation) pipeline built with **ai-builder**.
 
 ```bash
 source .venv/bin/activate
-python -m {pkg}.main
+python -m {pkg}
 ```
 
 This loads `data/raw/hello.md`, splits it into chunks, and prints them.
@@ -419,8 +574,7 @@ uv pip install -e ".[embeddings]"    # sentence-transformers
 uv pip install -e ".[faiss]"         # FAISS vector store
 uv pip install -e ".[docs]"          # all document parsers
 uv pip install -e ".[llm]"           # OpenAI + Anthropic
-uv pip install -e ".[langfuse]"      # tracing
-uv pip install -e ".[all]"           # everything
+uv pip install -e ".[all]"           # optional RAG extras (ipykernel + Langfuse already default)
 ```
 
 ## Configuration
@@ -429,6 +583,9 @@ Edit `.env`:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `LANGFUSE_PUBLIC_KEY` | _(empty)_ | Langfuse observability (optional) |
+| `LANGFUSE_SECRET_KEY` | _(empty)_ | Pair with public key to export traces |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse server URL |
 | `CHUNK_SIZE` | `1000` | Characters per chunk |
 | `CHUNK_OVERLAP` | `200` | Overlap between chunks |
 
@@ -443,7 +600,11 @@ kubectl apply -f k8s/             # Kubernetes
 
 ```
 {name}/
+├── src/tools/             # Re-exports for `from tools.document_loader / tools.llm import …`
+│   ├── document_loader/
+│   └── llm/
 ├── src/{pkg}/
+│   ├── __main__.py        # ``python -m {pkg}`` → ingest()
 │   ├── main.py            # Hello-world pipeline (loader + splitter)
 │   └── config.py           # Pydantic settings from .env
 ├── examples/

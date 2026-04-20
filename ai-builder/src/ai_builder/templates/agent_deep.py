@@ -23,6 +23,8 @@ requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "pydantic>=2.0",
+    "ipykernel>=6.29",
+    "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -34,9 +36,8 @@ langchain = [
     "langgraph>=0.2",
 ]
 search = ["tavily-python>=0.5"]
-langfuse = ["langfuse>=2.0"]
-dev = ["pytest>=8.0", "ipykernel>=6.29"]
-all = ["{name}[langchain,search,langfuse]"]
+dev = ["pytest>=8.0"]
+all = ["{name}[langchain,search]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -58,8 +59,7 @@ pydantic>=2.0
 # Anthropic:        uv pip install langchain-anthropic
 # Community tools:  uv pip install langchain-community
 # Web search:       uv pip install tavily-python
-# Tracing:          uv pip install langfuse
-# Notebooks:        uv pip install ipykernel
+# Note: ipykernel + langfuse ship with the default install.
 #
 # Or install everything at once: uv pip install -e ".[all]"
 """)
@@ -75,6 +75,11 @@ LOG_LEVEL=INFO
 # TAVILY_API_KEY=
 # MODEL_NAME=gpt-4o-mini
 # MAX_ITERATIONS=5
+
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
@@ -225,11 +230,18 @@ agent = {cls}()
 
 
 if __name__ == "__main__":
+    from ai_builder.tracing import Tracer, configure_tracing_from_env
+
+    configure_tracing_from_env()
+    Tracer.new_trace("{name}-deep-agent")
     query = "the impact of AI agents on software development"
     print(f"Query: {{query}}\\n")
-    result = agent.run(query)
-    print(result.response)
-    print(f"\\nMetadata: {{result.metadata}}")
+    try:
+        result = agent.run(query)
+        print(result.response)
+        print(f"\\nMetadata: {{result.metadata}}")
+    finally:
+        Tracer.flush()
 """)
 
     _write(target / "src" / pkg / "config.py", f"""\
@@ -383,9 +395,16 @@ class LangChain{cls}(BaseAgent):
 
 
 if __name__ == "__main__":
+    from ai_builder.tracing import Tracer, configure_tracing_from_env
+
+    configure_tracing_from_env()
+    Tracer.new_trace("{name}-deep-langchain")
     agent = LangChain{cls}()
-    result = agent.run("Research the latest trends in AI agents")
-    print(result.response)
+    try:
+        result = agent.run("Research the latest trends in AI agents")
+        print(result.response)
+    finally:
+        Tracer.flush()
 """)
 
     _write(target / "pipeline.yaml", f"""\
@@ -499,8 +518,7 @@ response = bus.send(AgentMessage(
 ```bash
 uv pip install -e ".[langchain]"     # LangChain + LangGraph
 uv pip install -e ".[search]"        # Tavily web search
-uv pip install -e ".[langfuse]"      # tracing
-uv pip install -e ".[all]"           # everything
+uv pip install -e ".[all]"           # langchain + search (Langfuse + ipykernel are default deps)
 ```
 
 ## Deploy

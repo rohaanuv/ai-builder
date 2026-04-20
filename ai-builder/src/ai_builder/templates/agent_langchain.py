@@ -23,6 +23,8 @@ requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "pydantic>=2.0",
+    "ipykernel>=6.29",
+    "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]
@@ -33,9 +35,8 @@ langchain = [
     "langchain-community>=0.3",
     "langgraph>=0.2",
 ]
-langfuse = ["langfuse>=2.0"]
-dev = ["pytest>=8.0", "ipykernel>=6.29"]
-all = ["{name}[langchain,langfuse]"]
+dev = ["pytest>=8.0"]
+all = ["{name}[langchain]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -56,8 +57,7 @@ pydantic>=2.0
 # LangChain stack:  uv pip install langchain langchain-openai langgraph
 # Anthropic:        uv pip install langchain-anthropic
 # Community tools:  uv pip install langchain-community
-# Tracing:          uv pip install langfuse
-# Notebooks:        uv pip install ipykernel
+# Note: ipykernel + langfuse ship with the default install.
 #
 # Or install everything at once: uv pip install -e ".[all]"
 """)
@@ -72,6 +72,11 @@ LOG_LEVEL=INFO
 # ANTHROPIC_API_KEY=
 # MODEL_NAME=gpt-4o-mini
 # TEMPERATURE=0.7
+
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
@@ -144,10 +149,17 @@ bus.register_agent(agent)
 
 
 if __name__ == "__main__":
+    from ai_builder.tracing import Tracer, configure_tracing_from_env
+
+    configure_tracing_from_env()
+    Tracer.new_trace("{name}-agent")
     query = "What is AI?"
     print(f"Query: {{query}}\\n")
-    result = agent.run(query)
-    print(result.response)
+    try:
+        result = agent.run(query)
+        print(result.response)
+    finally:
+        Tracer.flush()
 """)
 
     _write(target / "src" / pkg / "config.py", f"""\
@@ -363,13 +375,12 @@ print(response.content)
 
 ```bash
 uv pip install -e ".[langchain]"     # LangChain + LangGraph
-uv pip install -e ".[langfuse]"      # tracing
-uv pip install -e ".[all]"           # everything
+uv pip install -e ".[all]"           # same (Langfuse + ipykernel are default deps)
 ```
 
 ## Configuration
 
-Edit `.env`:
+Edit `.env` and set `LANGFUSE_*` to export traces to Langfuse (optional).
 
 | Variable | Default | Description |
 |----------|---------|-------------|

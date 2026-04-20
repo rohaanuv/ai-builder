@@ -23,11 +23,12 @@ requires-python = ">=3.11"
 dependencies = [
     "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
     "pydantic>=2.0",
+    "ipykernel>=6.29",
+    "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]
-langfuse = ["langfuse>=2.0"]
-dev = ["pytest>=8.0", "ipykernel>=6.29"]
+dev = ["pytest>=8.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -44,14 +45,18 @@ pydantic>=2.0
 
 # Add packages as needed — install with: uv pip install <package>
 #
-# Tracing:    uv pip install langfuse
-# Notebooks:  uv pip install ipykernel
+# Note: ipykernel + langfuse ship with the default install.
 """)
 
     _write(target / ".env", f"""\
 # {name} configuration
 PROJECT_NAME={name}
 LOG_LEVEL=INFO
+
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
 """)
 
     _write(target / "src" / pkg / "__init__.py", f"""\
