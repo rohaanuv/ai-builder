@@ -35,26 +35,6 @@ def _embedding_model_ids_ordered() -> list[str]:
     return list(SUPPORTED_MODELS.keys())
 
 
-def _print_sentence_transformers_catalog() -> None:
-    """Full ST catalog before embedding mode choice (same numbering as the picker step)."""
-    models = _embedding_model_ids_ordered()
-    rows = []
-    for i, mid in enumerate(models, start=1):
-        meta = SUPPORTED_MODELS[mid]
-        ex = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
-        rows.append(
-            f"  {i}. [cyan]{mid}[/cyan]  "
-            f"[dim](dim={meta['dim']}, max_seq={meta['max_seq']})[/dim]"
-            + (f"  [dim]uv:[/dim] [green]{ex}[/green]" if ex else ""),
-        )
-    body = (
-        "[bold]Sentence-transformers models[/bold] ([cyan]ai_builder.tools.embeddings[/cyan]). "
-        "Same list appears again when you choose [bold]local[/bold] embeddings.\n\n"
-        + "\n".join(rows)
-    )
-    console.print(Panel.fit(body, title="Embedding models — reference", border_style="cyan"))
-
-
 def _ask_data_source() -> DataSourceChoice:
     console.print(
         "\n[bold]Data source[/bold] (where raw documents live; see [cyan]ai_builder.tools.data_source[/cyan])\n"
@@ -86,7 +66,7 @@ def _ask_embedding() -> EmbeddingChoice:
     console.print(
         "\n[bold]Embeddings[/bold] (indexing / vector search)\n"
         "  0 = none (loader + splitter only)\n"
-        "  1 = local — [cyan]sentence-transformers[/cyan] (built-in Embedder — [dim]catalog above[/dim])\n"
+        "  1 = local — [cyan]sentence-transformers[/cyan] ([dim]then pick model 1–8[/dim])\n"
         "  2 = OpenAI API — [cyan]openai[/cyan] (custom embedding calls only)\n",
     )
     c = IntPrompt.ask("Embeddings", default=1, show_default=True)
@@ -104,11 +84,17 @@ def _ask_embedding_model_id() -> str:
     console.print("[bold]Which embedding model are you using?[/bold]")
     lo, hi = 1, len(models)
     console.print(
-        f"[dim]Choose {lo}–{hi}. Saved as [cyan]EMBEDDING_MODEL_ID[/cyan] in [cyan].env.example[/cyan]; "
-        "matching [green]embed-model-…[/green] extra in [cyan]pyproject.toml[/cyan].[/dim]\n",
+        f"[dim]Choose {lo}–{hi}. Saved as [cyan]EMBEDDING_MODEL_ID[/cyan]; "
+        "[cyan]pyproject.toml[/cyan] optional extra [green]embed-model-…[/green].[/dim]\n",
     )
     for i, mid in enumerate(models, start=1):
-        console.print(f"  {i}. [cyan]{mid}[/cyan]")
+        meta = SUPPORTED_MODELS[mid]
+        uv = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
+        uv_part = f" · [green]{uv}[/green]" if uv else ""
+        console.print(
+            f"  {i}. [cyan]{mid}[/cyan]\n"
+            f"     [dim]dim={meta['dim']}, max_seq={meta['max_seq']}{uv_part}[/dim]",
+        )
     c = IntPrompt.ask(f"Embedding model ({lo}–{hi})", default=1, show_default=True)
     idx = max(1, min(int(c), len(models))) - 1
     return models[idx]
@@ -215,7 +201,6 @@ def prompt_rag_choices() -> RagScaffoldChoices:
     )
 
     data_source = _ask_data_source()
-    _print_sentence_transformers_catalog()
     embedding = _ask_embedding()
     if embedding == "local":
         embedding_model_id = _ask_embedding_model_id()
