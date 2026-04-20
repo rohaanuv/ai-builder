@@ -23,7 +23,7 @@ Python requirement for scaffolds: **≥ 3.13** (as written in generated `pyproje
 **Interactive wizard (default):** On a TTY, **`ai-builder create rag <name>`** prompts for:
 
 1. **Data source** — local/EFS path, S3, Azure Blob, GCS, Google Drive / OneDrive (stubs), MinIO, Ceph RGW — updates **`requirements.txt`** with clients (**`boto3`**, **`azure-storage-blob`**, …) and fills **`DATA_SOURCE_*`** in **`.env.example`**.
-2. **Embeddings** — none / **`embeddings-local`** (sentence-transformers) / **`embeddings-openai`** (OpenAI client for custom flows).
+2. **Embeddings** — pick **one** Hugging Face **sentence-transformers** model from the numbered list (each maps to an **`embed-model-…`** optional extra); profile is always **local** ST embeddings + that **`EMBEDDING_MODEL_ID`**.
 3. **Vector database** — none, FAISS, Qdrant, Chroma, or extended backends (OpenSearch, Milvus, Postgres+pgvector, …). **FAISS / Chroma / Qdrant** are implemented in **`VectorStoreWriter`** / **`Retriever`**; others install client libraries for your own indexing code.
 4. **LLM provider** — optional **`llm-openai`**, **`llm-anthropic`**, **`llm-bedrock`**, Azure (no extra wheel).
 5. **Document formats** — PDF, Word, slides, HTML, … (granular **`pdf`**, **`word`**, … extras).

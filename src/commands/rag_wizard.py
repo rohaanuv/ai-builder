@@ -14,7 +14,6 @@ from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt
 
 from ai_builder.templates.rag_scaffold import (
-    DEFAULT_EMBEDDING_MODEL_ID,
     FORMAT_GROUPS,
     DataSourceChoice,
     EmbeddingChoice,
@@ -24,7 +23,6 @@ from ai_builder.templates.rag_scaffold import (
     selected_uv_extras,
 )
 from ai_builder.tools.embeddings.config import SUPPORTED_MODELS
-from ai_builder.tools.embeddings.registry import EMBEDDING_EXTRA_BY_MODEL
 
 # Use stdout so prompts align with Typer/Rich CLI output from ``create rag`` (same stream as version line).
 console = Console()
@@ -62,42 +60,25 @@ def _ask_data_source() -> DataSourceChoice:
     }.get(max(0, min(c, 8)), "local")
 
 
-def _ask_embedding() -> EmbeddingChoice:
-    console.print(
-        "\n[bold]Embeddings[/bold] (indexing / vector search)\n"
-        "  0 = none (loader + splitter only)\n"
-        "  1 = local — [cyan]sentence-transformers[/cyan] ([dim]then pick model 1–8[/dim])\n"
-        "  2 = OpenAI API — [cyan]openai[/cyan] (custom embedding calls only)\n",
-    )
-    c = IntPrompt.ask("Embeddings", default=1, show_default=True)
-    if c == 0:
-        return "none"
-    if c == 2:
-        return "openai_api"
-    return "local"
+def _ask_embeddings_sentence_transformers() -> tuple[EmbeddingChoice, str]:
+    """
+    Pick sentence-transformers model by index — always ``local`` embeddings + chosen HF id.
 
-
-def _ask_embedding_model_id() -> str:
-    """Pick a sentence-transformers model (``SUPPORTED_MODELS`` in ``embeddings.config``)."""
+    Options are exactly ``SUPPORTED_MODELS`` keys (see ``embeddings.config``).
+    """
     models = _embedding_model_ids_ordered()
-    console.print()
-    console.print("[bold]Which embedding model are you using?[/bold]")
     lo, hi = 1, len(models)
-    console.print(
-        f"[dim]Choose {lo}–{hi}. Saved as [cyan]EMBEDDING_MODEL_ID[/cyan]; "
-        "[cyan]pyproject.toml[/cyan] optional extra [green]embed-model-…[/green].[/dim]\n",
-    )
+    console.print("\n[bold]Embeddings[/bold] (indexing / vector search)\n")
     for i, mid in enumerate(models, start=1):
-        meta = SUPPORTED_MODELS[mid]
-        uv = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
-        uv_part = f" · [green]{uv}[/green]" if uv else ""
-        console.print(
-            f"  {i}. [cyan]{mid}[/cyan]\n"
-            f"     [dim]dim={meta['dim']}, max_seq={meta['max_seq']}{uv_part}[/dim]",
-        )
-    c = IntPrompt.ask(f"Embedding model ({lo}–{hi})", default=1, show_default=True)
-    idx = max(1, min(int(c), len(models))) - 1
-    return models[idx]
+        console.print(f"  {i}. [cyan]{mid}[/cyan]")
+    console.print()
+    console.print(
+        "[dim]sentence-transformers · saved as [cyan]EMBEDDING_MODEL_ID[/cyan] · "
+        "[cyan]pyproject.toml[/cyan] optional extra [green]embed-model-…[/green][/dim]\n",
+    )
+    c = IntPrompt.ask(f"Embeddings ({lo}–{hi})", default=1, show_default=True)
+    idx = max(lo, min(int(c), hi)) - 1
+    return "local", models[idx]
 
 
 def _ask_vector_backend() -> VectorBackendChoice:
@@ -201,11 +182,7 @@ def prompt_rag_choices() -> RagScaffoldChoices:
     )
 
     data_source = _ask_data_source()
-    embedding = _ask_embedding()
-    if embedding == "local":
-        embedding_model_id = _ask_embedding_model_id()
-    else:
-        embedding_model_id = DEFAULT_EMBEDDING_MODEL_ID
+    embedding, embedding_model_id = _ask_embeddings_sentence_transformers()
     vector_backend = _ask_vector_backend()
     llm = _ask_llm()
 
