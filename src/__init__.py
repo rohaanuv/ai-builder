@@ -1,6 +1,6 @@
 """ai-builder: Lightweight CLI framework for composable AI tools, agents, and pipelines."""
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"
 
 from ai_builder.core.tool import BaseTool, ToolInput, ToolOutput
 from ai_builder.core.agent import BaseAgent, AgentInput, AgentOutput

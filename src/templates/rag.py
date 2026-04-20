@@ -4,8 +4,16 @@ from pathlib import Path
 
 from ai_builder.templates import register, _to_snake, _write
 from ai_builder.deploy.generators import (
-    generate_dockerfile, generate_docker_compose,
-    generate_k8s_deployment, generate_k8s_service, generate_k8s_configmap, generate_k8s_hpa,
+    generate_dockerfile,
+    generate_docker_compose,
+    generate_k8s_namespace,
+    generate_k8s_pvc_rag_staging,
+    generate_k8s_pvc_qdrant,
+    generate_k8s_qdrant_deployment,
+    generate_k8s_qdrant_service,
+    generate_k8s_configmap_rag,
+    generate_k8s_job_rag_stage,
+    generate_k8s_rag_readme,
 )
 
 
@@ -19,15 +27,15 @@ def generate(name: str, target: Path) -> None:
 name = "{name}"
 version = "0.1.0"
 description = "RAG pipeline: {name}"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
-    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
+    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git",
     "pydantic>=2.0",
-    "ipykernel>=6.29",
     "langfuse>=2.0",
 ]
 
 [project.optional-dependencies]
+notebook = ["ipykernel>=6.29"]
 embeddings = ["sentence-transformers>=3.3"]
 faiss = ["faiss-cpu>=1.9"]
 docs = [
@@ -43,7 +51,7 @@ llm = ["openai>=1.0", "anthropic>=0.40"]
 chroma = ["chromadb>=0.5"]
 qdrant = ["qdrant-client>=1.12"]
 dev = ["pytest>=8.0"]
-all = ["{name}[embeddings,faiss,docs,llm]"]
+all = ["{name}[notebook,embeddings,faiss,docs,llm,qdrant]"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -55,7 +63,7 @@ build-backend = "setuptools.build_meta"
 
     _write(target / "requirements.txt", f"""\
 # Core (installed automatically)
-ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
+ai-builder @ git+https://github.com/rohaanuv/ai-builder.git
 pydantic>=2.0
 
 # Add packages as needed — install with: uv pip install <package>
@@ -72,26 +80,35 @@ pydantic>=2.0
 # RTF support:     uv pip install striprtf
 # OpenAI LLM:     uv pip install openai
 # Anthropic LLM:  uv pip install anthropic
-# Note: ipykernel + langfuse are in the default install (Jupyter + observability).
+# Optional: uv pip install -e ".[notebook]" for Jupyter kernels.
 # Chroma DB:      uv pip install chromadb
 # Qdrant DB:      uv pip install qdrant-client
 #
 # Or install all optional RAG extras: uv pip install -e ".[all]"
 """)
 
-    _write(target / ".env", f"""\
-# {name} configuration
+    _write(
+        target / ".env.example",
+        f"""\
+# Copy to ".env" and adjust (never commit real secrets).
+# cp .env.example .env
+
 PROJECT_NAME={name}
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 LOG_LEVEL=INFO
 
-# Langfuse observability — set keys to export traces from pipeline runs (optional)
+# Vector store (local compose uses Qdrant sidecar — see docker-compose.yml)
+VECTOR_PROVIDER=faiss
+QDRANT_URL=http://localhost:6333
+
+# Langfuse — traces from Tracer / configure_tracing_from_env()
 LANGFUSE_PUBLIC_KEY=
 LANGFUSE_SECRET_KEY=
 LANGFUSE_HOST=https://cloud.langfuse.com
 LANGFUSE_ENABLED=true
-""")
+""",
+    )
 
     # ── __init__.py ──
     # Lazy-load pipeline/ingest so ``python -m {pkg}.main`` does not import ``main`` twice
@@ -108,7 +125,7 @@ Quick start (works immediately — no extra packages needed):
 Full RAG (after installing extras):
 
     uv pip install -e ".[embeddings,faiss]"
-    # See examples/full_rag.py
+    # See app/full_rag.py
 \"\"\"
 
 from __future__ import annotations
@@ -160,7 +177,7 @@ It works immediately with zero optional packages.
     python -m {pkg}.main
 
 To build the full RAG pipeline (embed → store → retrieve → LLM),
-install the optional extras and see examples/full_rag.py:
+install the optional extras and see app/full_rag.py:
 
     uv pip install -e ".[embeddings,faiss]"
 \"\"\"
@@ -204,7 +221,7 @@ def ingest(source: str = "data/raw/") -> None:
         print()
         print("Next steps:")
         print("  uv pip install -e \\".[embeddings,faiss]\\"   # add vector embeddings")
-        print("  python examples/full_rag.py                 # run the full pipeline")
+        print("  python app/full_rag.py                     # run the full pipeline")
     finally:
         Tracer.flush()
 
@@ -217,16 +234,24 @@ if __name__ == "__main__":
     _write(target / "src" / pkg / "config.py", f"""\
 from pathlib import Path
 
+from pydantic import Field
+
 from ai_builder.core.config import BaseConfig
 
 
 class {cls}Config(BaseConfig):
+    \"\"\"Loads from `.env` (copy `.env.example` → `.env`).\"\"\"
+
     project_name: str = "{name}"
     data_dir: Path = Path("data")
 
     # Chunking
-    chunk_size: int = 1000
-    chunk_overlap: int = 200
+    chunk_size: int = Field(default=1000, ge=50)
+    chunk_overlap: int = Field(default=200, ge=0)
+
+    # Vector store — used by app/full_rag.py and Kubernetes embed Job
+    vector_provider: str = Field(default="faiss", description="faiss | chroma | qdrant")
+    qdrant_url: str = Field(default="http://localhost:6333")
 """)
 
     # ── sample data so first run produces output ──
@@ -273,29 +298,39 @@ Or use the CLI:
     ai-builder run . --input data/raw/
 """)
 
-    # ── examples/full_rag.py — full pipeline with embeddings + retrieval ──
-    _write(target / "examples" / "full_rag.py", f"""\
+    # ── app/full_rag.py — full pipeline: load → split → embed → store → retrieve ──
+    _write(target / "app" / "full_rag.py", f"""\
 \"\"\"
-Full RAG pipeline: load → split → embed → store → retrieve → LLM.
+Full RAG path: document load, chunking, embeddings, vector store, similarity search.
 
-Prerequisites:
+Prerequisites (install the project and optional RAG extras)::
+
+    cp .env.example .env
+    uv venv .venv && source .venv/bin/activate
+    uv pip install -e "."
     uv pip install -e ".[embeddings,faiss]"
-    # For LLM generation, also: uv pip install -e ".[llm]"
-    # and set OPENAI_API_KEY in .env
 
-Usage:
-    python examples/full_rag.py
+    # Qdrant (e.g. ``docker compose up`` with the Qdrant service) instead of FAISS:
+    # uv pip install -e ".[embeddings,qdrant]"
+
+Run::
+
+    python app/full_rag.py
 \"\"\"
 
-from pathlib import Path
+from __future__ import annotations
 
 from ai_builder.core.tool import ToolInput
 from ai_builder.tools import (
     DocumentLoader,
-    TextSplitter, SplitterConfig,
-    Embedder, EmbedderConfig,
-    VectorStoreWriter, VectorStoreConfig,
-    Retriever, RetrieverConfig, RetrieverInput,
+    TextSplitter,
+    SplitterConfig,
+    Embedder,
+    VectorStoreWriter,
+    VectorStoreConfig,
+    Retriever,
+    RetrieverConfig,
+    RetrieverInput,
 )
 from ai_builder.tracing import Tracer, configure_tracing_from_env
 
@@ -303,23 +338,32 @@ from {pkg}.config import {cls}Config
 
 config = {cls}Config()
 
-# ── Build the ingestion pipeline ──
+# Ingestion: load → split → embed → index (provider from config / .env)
 loader = DocumentLoader()
-splitter = TextSplitter(SplitterConfig(
-    chunk_size=config.chunk_size,
-    chunk_overlap=config.chunk_overlap,
-))
+splitter = TextSplitter(
+    SplitterConfig(
+        chunk_size=config.chunk_size,
+        chunk_overlap=config.chunk_overlap,
+    )
+)
 embedder = Embedder()
-store = VectorStoreWriter(VectorStoreConfig(
-    store_path=str(config.data_dir / "vectorstore"),
-))
+store = VectorStoreWriter(
+    VectorStoreConfig(
+        provider=config.vector_provider,  # faiss | chroma | qdrant
+        store_path=str(config.data_dir / "vectorstore"),
+        qdrant_url=config.qdrant_url,
+    )
+)
 
 ingest_pipeline = loader | splitter | embedder | store
 
-# ── Build the retriever ──
-retriever = Retriever(RetrieverConfig(
-    store_path=str(config.data_dir / "vectorstore"),
-))
+retriever = Retriever(
+    RetrieverConfig(
+        provider=config.vector_provider,
+        store_path=str(config.data_dir / "vectorstore"),
+        qdrant_url=config.qdrant_url,
+    )
+)
 
 
 def main() -> None:
@@ -419,13 +463,13 @@ def test_pipeline_runs():
     _write(
         target / "src" / "tools" / "__init__.py",
         '''\
-"""Thin re-exports from ai-builder so app code can use ``tools`` as the package root.
+"""Thin re-exports from ai-builder (document loaders only in this scaffold).
 
 Examples::
 
-    from tools.document_loader import loader_rtf, DocumentLoader
-    from tools.llm import connect_openai, connect_azure
-""",
+    from tools.document_loader import loader_pdf, DocumentLoader
+"""
+''',
     )
 
     _write(
@@ -471,151 +515,276 @@ __all__ = [
 ''',
     )
 
+    # ── Kubernetes stage runner (Jobs: extract → chunk → embed) ──
     _write(
-        target / "src" / "tools" / "llm" / "__init__.py",
-        '''\
-"""LLM connectors — ``from tools.llm import connect_openai``."""
+        target / "src" / pkg / "workers" / "__init__.py",
+        f'"""Stage workers for ``python -m {pkg}.workers.stage_runner`` (see ``k8s/README.md``)."""\n',
+    )
 
-from ai_builder.tools.llm import (
-    LLMConfig,
-    LLMInput,
-    LLMOutput,
-    LLMTool,
-    connectAnthropic,
-    connectAzure,
-    connectBedrock,
-    connectOllama,
-    connectOpenAI,
-    connectSelfHostedLLM,
-    connect_anthropic,
-    connect_azure,
-    connect_bedrock,
-    connect_ollama,
-    connect_openai,
-    connect_self_hosted_llm,
-)
+    _write(
+        target / "src" / pkg / "workers" / "stage_runner.py",
+        f'''\
+"""Run one RAG stage for Kubernetes Jobs (`RAG_STAGE` env).
 
-__all__ = [
-    "LLMConfig",
-    "LLMInput",
-    "LLMOutput",
-    "LLMTool",
-    "connectAnthropic",
-    "connectAzure",
-    "connectBedrock",
-    "connectOllama",
-    "connectOpenAI",
-    "connectSelfHostedLLM",
-    "connect_anthropic",
-    "connect_azure",
-    "connect_bedrock",
-    "connect_ollama",
-    "connect_openai",
-    "connect_self_hosted_llm",
-]
+Stages write JSON checkpoints under ``data/staging/``:
+
+- **extract** — ``DocumentLoader`` → ``documents.json``
+- **chunk** — ``TextSplitter`` → ``chunks.json``
+- **embed** — ``Embedder`` | ``VectorStoreWriter`` → vector DB (needs ``.[embeddings,qdrant]`` or faiss extras)
+
+Configure Langfuse via `.env` / ConfigMap so spans appear in Langfuse when keys are set.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+from ai_builder.core.tool import ToolInput
+from ai_builder.tracing import Tracer, configure_tracing_from_env
+
+from {pkg}.config import {cls}Config
+
+STAGE_EXTRACT = "extract"
+STAGE_CHUNK = "chunk"
+STAGE_EMBED = "embed"
+
+DOCS_NAME = "documents.json"
+CHUNKS_NAME = "chunks.json"
+
+
+def _staging_dir() -> Path:
+    root = Path(os.environ.get("RAG_DATA_DIR", "data"))
+    staging = root / "staging"
+    staging.mkdir(parents=True, exist_ok=True)
+    return staging
+
+
+def run_extract() -> int:
+    from ai_builder.tools import DocumentLoader
+
+    src = os.environ.get("RAG_SOURCE_DIR", "data/raw/")
+    loader = DocumentLoader()
+    result = loader.run(ToolInput(data=src))
+    if not result.success:
+        print(result.error or "loader failed", file=sys.stderr)
+        return 1
+    docs = result.data or []
+    path = _staging_dir() / DOCS_NAME
+    path.write_text(json.dumps(docs, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Wrote {{len(docs)}} documents to {{path}}")
+    return 0
+
+
+def run_chunk() -> int:
+    from ai_builder.tools import TextSplitter, SplitterConfig
+
+    staging = _staging_dir()
+    docs_path = staging / DOCS_NAME
+    if not docs_path.exists():
+        print("Missing staging/documents.json — run extract stage first.", file=sys.stderr)
+        return 1
+
+    docs = json.loads(docs_path.read_text(encoding="utf-8"))
+    cfg = {cls}Config()
+    splitter = TextSplitter(
+        SplitterConfig(chunk_size=cfg.chunk_size, chunk_overlap=cfg.chunk_overlap)
+    )
+    result = splitter.run(ToolInput(data=docs))
+    if not result.success:
+        print(result.error or "splitter failed", file=sys.stderr)
+        return 1
+    chunks = result.data or []
+    out = staging / CHUNKS_NAME
+    out.write_text(json.dumps(chunks, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Wrote {{len(chunks)}} chunks to {{out}}")
+    return 0
+
+
+def run_embed() -> int:
+    from ai_builder.tools import Embedder, VectorStoreConfig, VectorStoreWriter
+
+    staging = _staging_dir()
+    chunks_path = staging / CHUNKS_NAME
+    if not chunks_path.exists():
+        print("Missing staging/chunks.json — run chunk stage first.", file=sys.stderr)
+        return 1
+
+    chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
+    cfg = {cls}Config()
+    embedder = Embedder()
+    store = VectorStoreWriter(
+        VectorStoreConfig(
+            provider=cfg.vector_provider,
+            store_path=str(cfg.data_dir / "vectorstore"),
+            qdrant_url=cfg.qdrant_url,
+        )
+    )
+    pipeline = embedder | store
+    result = pipeline.run(ToolInput(data=chunks))
+    if not result.success:
+        failed = next((s for s in result.steps if not s.success), None)
+        print(failed.error if failed else "embed/store failed", file=sys.stderr)
+        return 1
+    print("Embedding and index write completed.")
+    return 0
+
+
+def main() -> int:
+    configure_tracing_from_env()
+    cfg = {cls}Config()
+    Tracer.new_trace(f"{{cfg.project_name}}-rag-{{os.environ.get('RAG_STAGE', '?')}}")
+    try:
+        stage = os.environ.get("RAG_STAGE", "").strip().lower()
+        if stage == STAGE_EXTRACT:
+            return run_extract()
+        if stage == STAGE_CHUNK:
+            return run_chunk()
+        if stage == STAGE_EMBED:
+            return run_embed()
+        print(
+            "Set RAG_STAGE to extract | chunk | embed (Kubernetes Job env).",
+            file=sys.stderr,
+        )
+        return 2
+    finally:
+        Tracer.flush()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 ''',
     )
 
     # ── Deployment files ──
-    _write(target / "Dockerfile", generate_dockerfile(name, pkg))
-    _write(target / "docker-compose.yml", generate_docker_compose(name, pkg))
-    _write(target / "k8s" / "deployment.yaml", generate_k8s_deployment(name))
-    _write(target / "k8s" / "service.yaml", generate_k8s_service(name))
-    _write(target / "k8s" / "configmap.yaml", generate_k8s_configmap(name))
-    _write(target / "k8s" / "hpa.yaml", generate_k8s_hpa(name))
+    _dockerfile = generate_dockerfile(name, pkg).replace(
+        "RUN pip install --no-cache-dir -e .",
+        'RUN pip install --no-cache-dir -e ".[embeddings,qdrant]"',
+        1,
+    )
+    _write(target / "Dockerfile", _dockerfile)
+    _write(target / "docker-compose.yml", generate_docker_compose(name, pkg, include_qdrant=True))
+    _write(target / "k8s" / "README.md", generate_k8s_rag_readme(name, pkg))
+    _write(target / "k8s" / "namespace.yaml", generate_k8s_namespace(name))
+    _write(target / "k8s" / "pvc-rag-staging.yaml", generate_k8s_pvc_rag_staging(name))
+    _write(target / "k8s" / "pvc-qdrant.yaml", generate_k8s_pvc_qdrant(name))
+    _write(target / "k8s" / "configmap-rag.yaml", generate_k8s_configmap_rag(name, pkg))
+    _write(target / "k8s" / "qdrant-deployment.yaml", generate_k8s_qdrant_deployment(name))
+    _write(target / "k8s" / "qdrant-service.yaml", generate_k8s_qdrant_service(name))
+    _write(target / "k8s" / "job-rag-extract.yaml", generate_k8s_job_rag_stage(name, pkg, "extract"))
+    _write(target / "k8s" / "job-rag-chunk.yaml", generate_k8s_job_rag_stage(name, pkg, "chunk"))
+    _write(target / "k8s" / "job-rag-embed.yaml", generate_k8s_job_rag_stage(name, pkg, "embed"))
 
     # ── README ──
     _write(target / "README.md", f"""\
 # {name}
 
-RAG (Retrieval-Augmented Generation) pipeline built with **ai-builder**.
+RAG (Retrieval-Augmented Generation) pipeline built with **ai-builder** (requires **Python 3.13+**).
 
-## Quick Start (works immediately)
+## 1. Environment
+
+Create the virtualenv **inside this project** so `.venv/bin/activate` exists here:
 
 ```bash
-source .venv/bin/activate
+cd /path/to/{name}
+uv venv --python 3.13 .venv
+source .venv/bin/activate          # Windows: .venv/Scripts/activate
+cp .env.example .env
+uv pip install -e "."
+```
+
+Installing the project in editable mode pulls **ai-builder** from `pyproject.toml` and registers `{pkg}` — required for `import ai_builder` and `python app/full_rag.py`.
+
+## 2. Hello path (no optional ML deps)
+
+```bash
 python -m {pkg}
+# or
+ai-builder run .
 ```
 
-This loads `data/raw/hello.md`, splits it into chunks, and prints them.
-No extra packages needed.
+Loads `data/raw/hello.md`, splits into chunks, prints a preview. Uses **Langfuse** only if keys are set (see below).
 
-## Level Up — Full RAG Pipeline
+## 3. Full pipeline (embeddings + vector store)
 
 ```bash
-# Add embeddings + vector store
 uv pip install -e ".[embeddings,faiss]"
-
-# Run the full pipeline
-python examples/full_rag.py
+python app/full_rag.py
 ```
 
-## Add Your Own Documents
+For **Qdrant** (matches `docker-compose` sidecar): `uv pip install -e ".[embeddings,qdrant]"` and set `VECTOR_PROVIDER=qdrant` in `.env`.
 
-Replace `data/raw/hello.md` with your files:
+## 4. Langfuse observability
 
-| Format | Extra package needed? |
-|--------|----------------------|
-| TXT, MD, CSV, JSON, XML | No (works out of the box) |
-| PDF | `uv pip install pdfplumber` |
-| DOCX | `uv pip install python-docx` |
-| DOC | `uv pip install docx2txt` |
-| PPTX | `uv pip install python-pptx` |
-| XLSX | `uv pip install openpyxl` |
-| HTML, HTM | `uv pip install beautifulsoup4` |
-| RTF | `uv pip install striprtf` |
+Traces use `configure_tracing_from_env()` (already wired in `main.py` and `app/full_rag.py`).
 
-Or install all document parsers at once: `uv pip install -e ".[docs]"`
+1. Create a project in [Langfuse](https://cloud.langfuse.com/) and copy API keys.
+2. Edit `.env`:
 
-## Optional Extras
+```env
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_HOST=https://cloud.langfuse.com
+LANGFUSE_ENABLED=true
+```
+
+3. Run any pipeline command; open Langfuse → Traces.
+
+Self-hosted Langfuse: set `LANGFUSE_HOST` to your instance URL.
+
+## 5. Document formats
+
+| Format | Extra |
+|--------|--------|
+| TXT, MD, CSV, JSON, XML | _(none)_ |
+| PDF | `uv pip install pdfplumber` or `-e ".[docs]"` |
+| DOCX / PPTX / HTML / RTF / XLSX | `-e ".[docs]"` |
+
+## 6. Docker Compose
+
+Requires `.env` (copy from `.env.example`). Compose adds a **Qdrant** service and points the app at it.
 
 ```bash
-uv pip install -e ".[embeddings]"    # sentence-transformers
-uv pip install -e ".[faiss]"         # FAISS vector store
-uv pip install -e ".[docs]"          # all document parsers
-uv pip install -e ".[llm]"           # OpenAI + Anthropic
-uv pip install -e ".[all]"           # optional RAG extras (ipykernel + Langfuse already default)
+docker compose up --build
 ```
 
-## Configuration
+## 7. Kubernetes (split services)
 
-Edit `.env`:
+Manifests separate **data extraction**, **chunking**, **embedding/indexing**, and **Qdrant** — see `k8s/README.md`. Jobs must run **extract → chunk → embed** in order (shared PVC).
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LANGFUSE_PUBLIC_KEY` | _(empty)_ | Langfuse observability (optional) |
-| `LANGFUSE_SECRET_KEY` | _(empty)_ | Pair with public key to export traces |
-| `LANGFUSE_HOST` | `https://cloud.langfuse.com` | Langfuse server URL |
-| `CHUNK_SIZE` | `1000` | Characters per chunk |
-| `CHUNK_OVERLAP` | `200` | Overlap between chunks |
-
-## Deploy
+## 8. Optional extras
 
 ```bash
-docker compose up --build         # Docker
-kubectl apply -f k8s/             # Kubernetes
+uv pip install -e ".[notebook]"    # Jupyter (ipykernel)
+uv pip install -e ".[embeddings]" # sentence-transformers
+uv pip install -e ".[faiss]"       # FAISS
+uv pip install -e ".[qdrant]"       # Qdrant client
+uv pip install -e ".[docs]"       # document parsers
+uv pip install -e ".[llm]"         # OpenAI + Anthropic (optional generation)
+uv pip install -e ".[all]"        # common optional stacks
 ```
 
-## Project Structure
+## Layout
 
 ```
 {name}/
-├── src/tools/             # Re-exports for `from tools.document_loader / tools.llm import …`
-│   ├── document_loader/
-│   └── llm/
+├── app/
+│   └── full_rag.py           # Full ingest + retrieve script
 ├── src/{pkg}/
-│   ├── __main__.py        # ``python -m {pkg}`` → ingest()
-│   ├── main.py            # Hello-world pipeline (loader + splitter)
-│   └── config.py           # Pydantic settings from .env
-├── examples/
-│   └── full_rag.py         # Full pipeline (embed + store + retrieve)
-├── data/raw/hello.md        # Sample document
+│   ├── main.py               # Loader + splitter demo
+│   ├── config.py             # Settings (.env)
+│   └── workers/
+│       └── stage_runner.py   # Kubernetes Job stages
+├── src/tools/document_loader/# Thin re-exports from ai-builder
+├── data/raw/hello.md
 ├── pipeline.yaml
 ├── tests/
 ├── Dockerfile
-├── docker-compose.yml
-├── k8s/
-├── .env
+├── docker-compose.yml        # App + Qdrant
+├── k8s/                     # Namespace, PVCs, Qdrant, Jobs
+├── .env.example
 └── pyproject.toml
 ```
 """)

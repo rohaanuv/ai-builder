@@ -11,17 +11,17 @@ A **lightweight Python CLI framework** for building composable AI tools, agents,
 ## Install from GitHub
 
 ```bash
-pip install "git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder"
+pip install "git+https://github.com/rohaanuv/ai-builder.git"
 ai-builder create rag my-project
-cd my-project && uv venv && uv pip install -e "."
+cd my-project && uv venv --python 3.13 .venv && uv pip install -e "."
 ```
 
-See `ai-builder/README.md` for full installation and usage documentation.
+See the **[repository README](README.md)** for a concise overview and **[docs/README.md](docs/README.md)** for complete multi-page documentation (CLI, templates, observability, deployment).
 
 ## Architecture
 
 ```
-ai-builder/src/ai_builder/
+src/                    # flat layout; import name ai_builder via package-dir in pyproject.toml
 ├── core/              # Pydantic-typed base classes
 │   ├── tool.py        # BaseTool[Input, Output] with | pipe operator
 │   ├── agent.py       # BaseAgent (LangGraph wrapper)
@@ -109,6 +109,10 @@ Tracer.configure(backend="langfuse", public_key="pk-...", secret_key="sk-...")
 5. **Deployment-ready** — every scaffold includes Dockerfile, docker-compose.yml, and k8s/ manifests
 6. **Minimal deps** — core framework needs only typer, rich, pydantic, pyyaml. Heavy deps (torch, langchain) are optional extras
 7. **uv-native** — all projects use `pyproject.toml` compatible with `uv sync`
+
+## Python version
+
+Framework **1.x** requires **Python 3.13+** (`requires-python >=3.13` in `pyproject.toml`).
 
 ## License
 

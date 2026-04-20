@@ -19,9 +19,9 @@ def generate(name: str, target: Path) -> None:
 name = "{name}"
 version = "0.1.0"
 description = "LangChain/LangGraph agent: {name}"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
-    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder",
+    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git",
     "pydantic>=2.0",
     "ipykernel>=6.29",
     "langfuse>=2.0",
@@ -48,7 +48,7 @@ build-backend = "setuptools.build_meta"
 
     _write(target / "requirements.txt", f"""\
 # Core (installed automatically)
-ai-builder @ git+https://github.com/rohaanuv/ai-builder.git#subdirectory=ai-builder
+ai-builder @ git+https://github.com/rohaanuv/ai-builder.git
 pydantic>=2.0
 
 # Add packages as needed — install with: uv pip install <package>

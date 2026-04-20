@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Callable
 
@@ -10,7 +9,7 @@ GeneratorFn = Callable[[str, Path], None]
 
 TEMPLATE_REGISTRY: dict[str, GeneratorFn] = {}
 
-_PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}"
+_PYTHON_VERSION = "3.13"
 
 _GITIGNORE = """\
 __pycache__/

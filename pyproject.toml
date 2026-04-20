@@ -1,18 +1,16 @@
 [project]
 name = "ai-builder"
-version = "0.1.0"
+version = "1.0.0"
 description = "Lightweight CLI framework for building composable AI tools, agents, and pipelines"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = {text = "AGPL-3.0-or-later"}
 keywords = ["ai", "agents", "rag", "pipeline", "llm", "langchain", "cli"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
@@ -75,8 +73,38 @@ Issues = "https://github.com/rohaanuv/ai-builder/issues"
 [project.scripts]
 ai-builder = "ai_builder.cli:app"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools]
+# Flat layout: package files live directly under src/; import name remains ai_builder.
+package-dir = {"ai_builder" = "src"}
+packages = [
+    "ai_builder",
+    "ai_builder.commands",
+    "ai_builder.core",
+    "ai_builder.deploy",
+    "ai_builder.templates",
+    "ai_builder.tools",
+    "ai_builder.tools.document_loader",
+    "ai_builder.tools.document_loader.common",
+    "ai_builder.tools.document_loader.loader_epub",
+    "ai_builder.tools.document_loader.loader_html",
+    "ai_builder.tools.document_loader.loader_json",
+    "ai_builder.tools.document_loader.loader_pdf",
+    "ai_builder.tools.document_loader.loader_rtf",
+    "ai_builder.tools.document_loader.loader_slides",
+    "ai_builder.tools.document_loader.loader_spreadsheet",
+    "ai_builder.tools.document_loader.loader_text",
+    "ai_builder.tools.document_loader.loader_word",
+    "ai_builder.tools.document_loader.loader_xml",
+    "ai_builder.tools.embedder",
+    "ai_builder.tools.llm",
+    "ai_builder.tools.llm.connectors",
+    "ai_builder.tools.retriever",
+    "ai_builder.tools.splitter",
+    "ai_builder.tools.vector_store",
+    "ai_builder.tools.web_search",
+    "ai_builder.tracing",
+    "ai_builder.visualize",
+]
 
 [build-system]
 requires = ["setuptools>=75"]
@@ -84,6 +112,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
