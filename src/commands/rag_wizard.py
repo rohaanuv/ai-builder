@@ -25,6 +25,27 @@ from ai_builder.tools.embeddings.registry import EMBEDDING_EXTRA_BY_MODEL
 console = Console()
 
 
+def _print_sentence_transformers_catalog() -> None:
+    """Always show full ST catalog before embedding mode choice (wizard UX)."""
+    models = list(SUPPORTED_MODELS.keys())
+    rows: list[str] = []
+    for i, mid in enumerate(models, start=1):
+        meta = SUPPORTED_MODELS[mid]
+        ex = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
+        rows.append(
+            f"  {i:2}  [cyan]{mid}[/cyan]  "
+            f"[dim]dim={meta['dim']}, max_seq={meta['max_seq']}[/dim]"
+            + (f"  [dim]│ uv:[/dim] [green]{ex}[/green]" if ex else ""),
+        )
+    body = (
+        "[bold]All sentence-transformers models[/bold] supported by "
+        "[cyan]ai_builder.tools.embeddings[/cyan]. "
+        "Pick one below if you choose [bold]local[/bold] embeddings.\n\n"
+        + "\n".join(rows)
+    )
+    console.print(Panel.fit(body, title="Embedding models", border_style="cyan"))
+
+
 def _ask_data_source() -> DataSourceChoice:
     console.print(
         "\n[bold]Data source[/bold] (where raw documents live; see [cyan]ai_builder.tools.data_source[/cyan])\n"
@@ -56,7 +77,7 @@ def _ask_embedding() -> EmbeddingChoice:
     console.print(
         "\n[bold]Embeddings[/bold] (indexing / vector search)\n"
         "  0 = none (loader + splitter only)\n"
-        "  1 = local — [cyan]sentence-transformers[/cyan] (built-in Embedder)\n"
+        "  1 = local — [cyan]sentence-transformers[/cyan] (built-in Embedder — [dim]catalog above[/dim])\n"
         "  2 = OpenAI API — [cyan]openai[/cyan] (custom embedding calls only)\n",
     )
     c = IntPrompt.ask("Embeddings", default=1, show_default=True)
@@ -134,12 +155,23 @@ def _ask_vector_backend() -> VectorBackendChoice:
 
 def _ask_llm() -> LlmChoice:
     console.print(
-        "\n[bold]LLM provider[/bold] (generation — matches ai_builder.tools.llm)\n"
+        Panel.fit(
+            "[bold]All LLM backends[/bold] match [cyan]Provider[/cyan] in "
+            "[cyan]ai_builder.tools.llm.config[/cyan] and connectors under "
+            "[cyan]ai_builder.tools.llm.connectors[/cyan].",
+            title="LLM providers",
+            border_style="green",
+        ),
+    )
+    console.print(
+        "\n[bold]LLM provider[/bold] (generation)\n"
         "  0 = none\n"
-        "  1 = OpenAI-compatible SDK ([cyan]openai[/cyan])\n"
-        "  2 = Anthropic ([cyan]anthropic[/cyan])\n"
-        "  3 = AWS Bedrock ([cyan]anthropic[/cyan] AnthropicBedrock)\n"
-        "  4 = Azure OpenAI ([dim]stdlib HTTP in ai-builder[/dim])\n",
+        "  1 = OpenAI-compatible SDK ([cyan]openai[/cyan]) — OpenAI or compatible HTTP APIs\n"
+        "  2 = Anthropic ([cyan]anthropic[/cyan]) — Messages API\n"
+        "  3 = AWS Bedrock ([cyan]bedrock[/cyan]) — Claude via Bedrock\n"
+        "  4 = Azure OpenAI ([cyan]azure[/cyan]) — API key or OAuth-style auth\n"
+        "  5 = Ollama ([cyan]ollama[/cyan]) — local server, stdlib HTTP in LLMTool\n"
+        "  6 = Self-hosted OpenAI-compatible ([cyan]self_hosted[/cyan]) — vLLM, LiteLLM, …\n",
     )
     c = IntPrompt.ask("LLM provider", default=0, show_default=True)
     return {
@@ -148,7 +180,9 @@ def _ask_llm() -> LlmChoice:
         2: "anthropic",
         3: "bedrock",
         4: "azure",
-    }.get(max(0, min(c, 4)), "none")
+        5: "ollama",
+        6: "self_hosted",
+    }.get(max(0, min(c, 6)), "none")
 
 
 def _ask_formats(chosen: set[str]) -> None:
@@ -183,6 +217,7 @@ def prompt_rag_choices() -> RagScaffoldChoices:
     )
 
     data_source = _ask_data_source()
+    _print_sentence_transformers_catalog()
     embedding = _ask_embedding()
     if embedding == "local":
         embedding_model_id = _ask_embedding_model_id()

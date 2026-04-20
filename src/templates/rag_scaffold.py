@@ -56,7 +56,7 @@ DataSourceChoice = Literal[
     "ceph_s3",
 ]
 
-LlmChoice = Literal["none", "openai", "anthropic", "bedrock", "azure"]
+LlmChoice = Literal["none", "openai", "anthropic", "bedrock", "azure", "ollama", "self_hosted"]
 
 # pip lines per vector backend (extras names in pyproject use vector-* except faiss/qdrant/chroma).
 VECTOR_BACKEND_PACKAGES: dict[str, tuple[str, ...]] = {
@@ -256,6 +256,9 @@ def _llm_packages(kind: LlmChoice) -> list[str]:
         "anthropic": ["anthropic>=0.40"],
         "bedrock": ["anthropic>=0.40"],
         "azure": [],
+        # Ollama / self-hosted use stdlib HTTP in LLMTool — no extra wheels
+        "ollama": [],
+        "self_hosted": [],
     }[kind]
 
 
@@ -303,6 +306,8 @@ def selected_uv_extras(choices: RagScaffoldChoices) -> list[str]:
         xs.append("llm-anthropic")
     elif choices.llm == "bedrock":
         xs.append("llm-bedrock")
+    elif choices.llm in ("ollama", "self_hosted"):
+        pass  # optional extras not required — wire LLMConfig / env in your app
     for key in sorted(choices.formats):
         if key in FORMAT_GROUPS:
             xs.append(key)
@@ -358,9 +363,47 @@ def render_dot_env_example(project_name: str, choices: RagScaffoldChoices | None
         "# --- Embeddings (sentence-transformers; Embedder + Retriever in full_rag) ---",
         f"EMBEDDING_MODEL_ID={c.embedding_model_id}",
         "",
-        "# --- Data source (see ai_builder.tools.data_source) ---",
-        f"DATA_SOURCE_TYPE={c.data_source}",
+        "# --- LLM (ai_builder.tools.llm — Provider in LLMConfig) ---",
+        f"# Wizard choice: {c.llm}",
     ]
+
+    llm_extra: dict[str, list[str]] = {
+        "none": ["# LLMTool unused — install an llm-* extra later if needed."],
+        "openai": [
+            "OPENAI_API_KEY=",
+            "# OPENAI_BASE_URL=https://api.openai.com/v1  # OpenAI-compatible proxies / Azure-style URLs",
+        ],
+        "anthropic": ["ANTHROPIC_API_KEY="],
+        "bedrock": [
+            "AWS_REGION=us-east-1",
+            "# AWS_ACCESS_KEY_ID= … (or IAM role)",
+            "# AWS_SECRET_ACCESS_KEY=",
+            "# Claude on Bedrock via anthropic[boto] paths — see connectors/bedrock.py",
+        ],
+        "azure": [
+            "AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/",
+            "AZURE_OPENAI_API_KEY=",
+            "# AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini",
+        ],
+        "ollama": [
+            "# Ollama HTTP API — LLMTool uses urllib (no pip extra)",
+            "OLLAMA_BASE_URL=http://localhost:11434",
+            "# Model name defaults in code; set in LLMConfig(model=…)",
+        ],
+        "self_hosted": [
+            "# vLLM, LiteLLM gateway, OpenAI-compatible — set base URL + model",
+            "SELF_HOSTED_LLM_BASE_URL=http://localhost:8000/v1",
+            "# SELF_HOSTED_LLM_API_KEY=  # optional bearer",
+        ],
+    }
+    lines.extend(llm_extra.get(c.llm, []))
+    lines.extend(
+        [
+            "",
+            "# --- Data source (see ai_builder.tools.data_source) ---",
+            f"DATA_SOURCE_TYPE={c.data_source}",
+        ],
+    )
 
     if c.data_source in ("local", "efs"):
         lines.extend(
