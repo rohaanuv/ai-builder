@@ -1,4 +1,9 @@
-"""Interactive dependency selection for `ai-builder create rag`."""
+"""Interactive dependency selection — **only** for ``ai-builder create rag``.
+
+Other commands (``create tool``, ``create pipeline``, ``create agent-*``) do not use this wizard;
+they scaffold with fixed templates. Only ``create rag`` reads these prompts to fill
+``pyproject.toml`` / ``requirements.txt`` / ``.env.example``.
+"""
 
 from __future__ import annotations
 
@@ -199,10 +204,13 @@ def _ask_formats(chosen: set[str]) -> None:
 def prompt_rag_choices() -> RagScaffoldChoices:
     console.print(
         Panel.fit(
-            "[bold]Configure dependencies[/bold]\n"
+            "[bold]Configure dependencies[/bold] for this RAG scaffold only.\n\n"
+            "[dim]Applies to[/dim] [cyan]ai-builder create rag <name>[/cyan] [dim]— not[/dim] "
+            "[cyan]create tool[/cyan][dim],[/dim] [cyan]create pipeline[/cyan][dim], or[/dim] "
+            "[cyan]create agent-*[/cyan][dim].[/dim]\n\n"
             "Updates [cyan]requirements.txt[/cyan], [cyan].env.example[/cyan], "
             "and prints [cyan]uv pip install -e \".[…]\"[/cyan].",
-            title="ai-builder create rag",
+            title="create rag — dependency profile",
         ),
     )
 
