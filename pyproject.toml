@@ -1,6 +1,6 @@
 [project]
 name = "ai-builder"
-version = "1.0.0"
+version = "1.1.0"
 description = "Lightweight CLI framework for building composable AI tools, agents, and pipelines"
 readme = "README.md"
 requires-python = ">=3.13"

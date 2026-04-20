@@ -45,6 +45,8 @@ Example: `pip install "ai-builder[docs-pdf] @ git+https://github.com/rohaanuv/ai
 
 ## CLI
 
+You need **ai-builder ≥ 1.1** for the interactive **`create rag`** wizard. Check with **`ai-builder version`** (or the first line when you run **`create rag`**: `ai-builder 1.1.x — dependency profile`). Upgrade: **`pip install --upgrade "git+https://github.com/rohaanuv/ai-builder.git"`**.
+
 ```bash
 ai-builder create rag my-app   # wizard: data source, embeddings, vector DB, LLM, formats
 # ai-builder create rag my-app --no-wizard   # skip prompts (comment-only requirements.txt)

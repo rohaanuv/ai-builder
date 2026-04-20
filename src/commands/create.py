@@ -59,7 +59,7 @@ def _scaffold(
 
     generator = TEMPLATE_REGISTRY[template_name]
     kwargs: dict[str, object] = {}
-    if template_name == "rag" and rag_choices is not None:
+    if template_name == "rag":
         kwargs["choices"] = rag_choices
     generator(project_name, target, **kwargs)
     console.print(f"\n[bold green]✓[/bold green] Created [cyan]{project_name}[/cyan] at {target}")
@@ -126,8 +126,10 @@ def create_rag(
     ),
 ) -> None:
     """Create a RAG pipeline: load → split → embed → store → retrieve."""
+    from ai_builder import __version__
     from ai_builder.commands.rag_wizard import prompt_rag_choices_optional
 
+    console.print(f"[dim]ai-builder {__version__} — dependency profile[/dim]")
     choices = prompt_rag_choices_optional(wizard)
     _scaffold("rag", name, output_dir, rag_choices=choices)
 

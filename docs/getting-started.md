@@ -11,6 +11,14 @@ This guide takes you from a clean machine to a running scaffolded project.
 
 ```bash
 pip install "git+https://github.com/rohaanuv/ai-builder.git"
+# Or upgrade so you get the latest `create rag` wizard and templates:
+pip install --upgrade "git+https://github.com/rohaanuv/ai-builder.git"
+```
+
+From a clone, use an editable install so `ai-builder` on your PATH matches the repo:
+
+```bash
+cd ai-builder && uv pip install -e "."
 ```
 
 Verify:

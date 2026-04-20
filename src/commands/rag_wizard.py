@@ -175,12 +175,14 @@ def prompt_rag_choices() -> RagScaffoldChoices:
 
 
 def prompt_rag_choices_optional(use_wizard: bool) -> RagScaffoldChoices | None:
+    """Return None only for explicit ``--no-wizard`` (minimal requirements.txt)."""
     if not use_wizard:
         return None
+    # IDE / piped / CI: cannot prompt — use a full default profile (not empty comments).
     if not sys.stdin.isatty():
         console.print(
-            "[yellow]stdin is not a TTY — skipping wizard; "
-            "requirements.txt will only contain core deps + comments[/yellow]",
+            "[yellow]Not an interactive terminal — using default dependency profile "
+            "(install ai-builder from source / upgrade if prompts never appear).[/yellow]",
         )
-        return None
+        return RagScaffoldChoices.non_interactive_default()
     return prompt_rag_choices()
