@@ -18,7 +18,7 @@
 <p align="center">
   <a href="https://www.python.org/downloads/release/python-3130/"><img src="https://img.shields.io/badge/Python-3.13+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.13 or newer"/></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square" alt="License AGPL 3.0"/></a>
-  <a href="./pyproject.toml"><img src="https://img.shields.io/badge/package-1.1.0-2ea44f?style=flat-square" alt="ai-builder package version 1.1.0"/></a>
+  <a href="./pyproject.toml"><img src="https://img.shields.io/badge/package-1.2.0-2ea44f?style=flat-square" alt="ai-builder package version 1.2.0"/></a>
   <a href="https://github.com/rohaanuv/ai-builder/graphs/contributors"><img src="https://img.shields.io/github/contributors/rohaanuv/ai-builder?style=flat-square&logo=github&label=contributors" alt="GitHub contributor count"/></a>
   <a href="https://github.com/rohaanuv/ai-builder/stargazers"><img src="https://img.shields.io/github/stars/rohaanuv/ai-builder?style=flat-square&logo=github&label=stars&color=yellow" alt="GitHub stars for rohaanuv ai-builder"/></a>
   <a href="https://github.com/rohaanuv/ai-builder/network/members"><img src="https://img.shields.io/github/forks/rohaanuv/ai-builder?style=flat-square&logo=github&label=forks" alt="GitHub forks"/></a>
@@ -36,7 +36,7 @@
 | Principle | What you get |
 | :--- | :--- |
 | **Design** | Small surface area; **optional extras** so you install only document parsers, **vector DB** clients, and **LLM** SDKs you need |
-| **RAG** | Interactive **`ai-builder create rag`** wizard (CLI **≥ 1.1**): data sources, embedding model, vector backend, LLM, formats → **`pyproject.toml`**, **`requirements.txt`**, **`.env.example`** |
+| **RAG** | Interactive **`ai-builder create rag`** wizard (**1.2+**: sentence-transformers **model** picker): data sources, embeddings, vector backend, LLM, formats → **`pyproject.toml`**, **`requirements.txt`**, **`.env.example`** |
 | **Vectors** | Built-in **FAISS**, **Chroma**, **Qdrant**; other backends ship as optional clients for your own wiring |
 
 ---
@@ -90,7 +90,7 @@ cp .env.example .env && uv pip install -e "."
 python -m my_app   # package name matches your project (e.g. my-app → my_app)
 ```
 
-Use **`ai-builder version`** to confirm **≥ 1.1** for the full **`create rag`** wizard. Use **`--no-wizard`** for a minimal **`requirements.txt`** with comment hints.
+Use **`ai-builder version`** — **1.2.0** or newer includes the **embedding model** step when you choose local sentence-transformers. Upgrade with **`pip install --upgrade "git+https://github.com/rohaanuv/ai-builder.git"`** if that step is missing. Use **`--no-wizard`** for a minimal **`requirements.txt`** with comment hints.
 
 **Library — compose tools as a pipeline:**
 

@@ -21,7 +21,8 @@ from ai_builder.templates.rag_scaffold import (
 from ai_builder.tools.embeddings.config import SUPPORTED_MODELS
 from ai_builder.tools.embeddings.registry import EMBEDDING_EXTRA_BY_MODEL
 
-console = Console(stderr=True)
+# Use stdout so prompts align with Typer/Rich CLI output from ``create rag`` (same stream as version line).
+console = Console()
 
 
 def _ask_data_source() -> DataSourceChoice:
@@ -37,7 +38,7 @@ def _ask_data_source() -> DataSourceChoice:
         "  7 = MinIO (self-hosted, S3 API)\n"
         "  8 = Ceph RGW (S3 API)\n",
     )
-    c = IntPrompt.ask("Choice", default=0, show_default=True)
+    c = IntPrompt.ask("Data source", default=0, show_default=True)
     return {
         0: "local",
         1: "efs",
@@ -58,7 +59,7 @@ def _ask_embedding() -> EmbeddingChoice:
         "  1 = local — [cyan]sentence-transformers[/cyan] (built-in Embedder)\n"
         "  2 = OpenAI API — [cyan]openai[/cyan] (custom embedding calls only)\n",
     )
-    c = IntPrompt.ask("Choice", default=1, show_default=True)
+    c = IntPrompt.ask("Embeddings", default=1, show_default=True)
     if c == 0:
         return "none"
     if c == 2:
@@ -92,7 +93,7 @@ def _ask_embedding_model_id() -> str:
             f"  {i:2} = [cyan]{mid}[/cyan]{extra_line}\n"
             f"      [dim]dim={meta['dim']}, max_seq={meta['max_seq']}[/dim]",
         )
-    c = IntPrompt.ask("Choice", default=1, show_default=True)
+    c = IntPrompt.ask("Embedding model", default=1, show_default=True)
     idx = max(1, min(int(c), len(models))) - 1
     return models[idx]
 
@@ -114,7 +115,7 @@ def _ask_vector_backend() -> VectorBackendChoice:
         "  10 = Redis\n"
         "  11 = LanceDB\n",
     )
-    c = IntPrompt.ask("Choice", default=1, show_default=True)
+    c = IntPrompt.ask("Vector database", default=1, show_default=True)
     return {
         0: "none",
         1: "faiss",
@@ -140,7 +141,7 @@ def _ask_llm() -> LlmChoice:
         "  3 = AWS Bedrock ([cyan]anthropic[/cyan] AnthropicBedrock)\n"
         "  4 = Azure OpenAI ([dim]stdlib HTTP in ai-builder[/dim])\n",
     )
-    c = IntPrompt.ask("Choice", default=0, show_default=True)
+    c = IntPrompt.ask("LLM provider", default=0, show_default=True)
     return {
         0: "none",
         1: "openai",
