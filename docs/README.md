@@ -16,7 +16,7 @@
 | [Installation and upgrade](installation-and-upgrade.md) | `pip` / `uv`, Git URL, extras, pinning versions |
 | [CLI reference](cli-reference.md) | All commands: `create`, `run`, `visualize`, `serve`, `add`, … |
 | [Core concepts](core-concepts.md) | `BaseTool`, `Pipeline`, config, agents, piping |
-| [Templates](templates.md) | What each scaffold generates (`tool`, `rag`, agents, pipeline) |
+| [Templates](templates.md) | Scaffolds including **`create rag`** wizard, data sources, vector extras |
 | [Built-in tools](built-in-tools.md) | Loader, splitter, embedder, vector stores, retriever, LLM, search |
 | [Configuration and environment](configuration-and-environment.md) | `.env`, `BaseConfig`, project settings |
 | [Observability](observability.md) | Tracing API and Langfuse export |
