@@ -22,7 +22,31 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Built-in tools: document processing
+# Document loaders — install only what you need per file type
+docs-pdf = ["pdfplumber>=0.11"]
+docs-word = ["python-docx>=1.1", "docx2txt>=0.8"]
+docs-slides = ["python-pptx>=1.0"]
+docs-html = ["beautifulsoup4>=4.12"]
+docs-rtf = ["striprtf>=0.0.26"]
+docs-spreadsheet = ["openpyxl>=3.1", "xlrd>=2.0"]
+docs-epub = ["ebooklib>=0.18", "beautifulsoup4>=4.12"]
+docs-odt = ["odfpy>=1.4"]
+data-s3 = ["boto3>=1.34"]
+data-minio = ["boto3>=1.34"]
+data-ceph-s3 = ["boto3>=1.34"]
+data-azure-blob = ["azure-storage-blob>=12.19", "azure-identity>=1.14"]
+data-gcs = ["google-cloud-storage>=2.14"]
+data-gdrive = ["google-api-python-client>=2.100", "google-auth-oauthlib>=1.2"]
+data-onedrive = ["msal>=1.26", "requests>=2.31"]
+vector-opensearch = ["opensearch-py>=2.4"]
+vector-milvus = ["pymilvus>=2.4"]
+vector-mongodb = ["pymongo>=4.6"]
+vector-postgres = ["psycopg[binary]>=3.1", "pgvector>=0.2"]
+vector-weaviate = ["weaviate-client>=4.4"]
+vector-vald = ["grpcio>=1.60", "protobuf>=4.21"]
+vector-redis = ["redis>=5.0"]
+vector-lancedb = ["lancedb>=0.6"]
+# Built-in tools: all document formats (union of the above)
 docs = [
     "pdfplumber>=0.11",
     "python-docx>=1.1",
@@ -33,14 +57,19 @@ docs = [
     "docx2txt>=0.8",
     "xlrd>=2.0",
     "ebooklib>=0.18",
+    "odfpy>=1.4",
 ]
-# Built-in tools: embeddings + vector store
+embeddings-local = ["sentence-transformers>=3.3"]
+embeddings-openai = ["openai>=1.0"]
+embeddings = ["sentence-transformers>=3.3"]
 rag = [
     "sentence-transformers>=3.3",
     "faiss-cpu>=1.9",
     "langchain-text-splitters>=0.3",
 ]
-# LLM providers
+llm-openai = ["openai>=1.0"]
+llm-anthropic = ["anthropic>=0.40"]
+llm-bedrock = ["anthropic>=0.40"]
 llm = ["openai>=1.0", "anthropic>=0.40"]
 # Agent frameworks
 agents = [
@@ -55,6 +84,7 @@ tracing = ["langfuse>=2.0"]
 # Web dashboard
 serve = ["fastapi>=0.115", "uvicorn[standard]>=0.34"]
 # Vector DB alternatives
+faiss = ["faiss-cpu>=1.9"]
 chroma = ["chromadb>=0.5"]
 qdrant = ["qdrant-client>=1.12"]
 # Web search
@@ -95,6 +125,7 @@ packages = [
     "ai_builder.tools.document_loader.loader_text",
     "ai_builder.tools.document_loader.loader_word",
     "ai_builder.tools.document_loader.loader_xml",
+    "ai_builder.tools.data_source",
     "ai_builder.tools.embedder",
     "ai_builder.tools.llm",
     "ai_builder.tools.llm.connectors",

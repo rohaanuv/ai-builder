@@ -11,6 +11,30 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+# Import name from ModuleNotFoundError → ai-builder optional extra (see pyproject.toml).
+_OPTIONAL_IMPORT_TO_EXTRA: dict[str, str] = {
+    "pdfplumber": "docs-pdf",
+    "docx": "docs-word",
+    "pptx": "docs-slides",
+    "bs4": "docs-html",
+    "striprtf": "docs-rtf",
+    "openpyxl": "docs-spreadsheet",
+    "xlrd": "docs-spreadsheet",
+    "ebooklib": "docs-epub",
+    "odf": "docs-odt",
+}
+
+
+def _missing_optional_dep_message(exc: ModuleNotFoundError) -> str:
+    name = exc.name or ""
+    extra = _OPTIONAL_IMPORT_TO_EXTRA.get(name, "docs")
+    return (
+        f"Missing optional dependency {name!r}. "
+        f'Install with: pip install "ai-builder[{extra}]" '
+        f'(or pip install "ai-builder[docs]" for all document formats).'
+    )
+
+
 # Extensions the umbrella loader accepts (single-family tools use subsets).
 DEFAULT_UMBRELLA_FORMATS: list[str] = [
     ".txt",
@@ -31,6 +55,7 @@ DEFAULT_UMBRELLA_FORMATS: list[str] = [
     ".xlsx",
     ".xls",
     ".epub",
+    ".odt",
 ]
 
 
@@ -158,6 +183,15 @@ def extract_epub(path: Path) -> str:
     return "\n\n".join(chunks)
 
 
+def extract_odt(path: Path) -> str:
+    from odf.opendocument import load
+    from odf import teletype
+    from odf.text import P
+
+    doc = load(str(path))
+    return "\n".join(teletype.extractText(p) for p in doc.getElementsByType(P))
+
+
 _SUFFIX_HANDLERS: dict[str, Callable[[Path], str]] = {
     ".txt": extract_plain,
     ".md": extract_plain,
@@ -177,6 +211,7 @@ _SUFFIX_HANDLERS: dict[str, Callable[[Path], str]] = {
     ".xlsx": extract_xlsx,
     ".xls": extract_xls,
     ".epub": extract_epub,
+    ".odt": extract_odt,
 }
 
 
@@ -192,6 +227,8 @@ def extract_for_path(path: Path, allowed_suffixes: set[str] | None = None) -> st
         return handler(path)
     except NotImplementedError:
         raise
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(_missing_optional_dep_message(exc)) from exc
     except Exception:
         logger.warning("Extractor failed for %s", path, exc_info=True)
         raise

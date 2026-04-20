@@ -10,7 +10,7 @@ from ai_builder.deploy.generators import (
 
 
 @register("tool")
-def generate(name: str, target: Path) -> None:
+def generate(name: str, target: Path, **_kwargs: object) -> None:
     pkg = _to_snake(name)
     cls = "".join(w.capitalize() for w in name.split("-")) + "Tool"
 

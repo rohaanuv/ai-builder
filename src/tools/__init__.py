@@ -49,6 +49,12 @@ from ai_builder.tools.llm import (
 )
 from ai_builder.tools.retriever import Retriever, RetrieverConfig, RetrieverInput, RetrieverOutput
 from ai_builder.tools.splitter import SplitterConfig, SplitterOutput, TextSplitter
+from ai_builder.tools.data_source import (
+    AzureBlobDataSource,
+    GcsDataSource,
+    LocalFilesystemDataSource,
+    S3DataSource,
+)
 from ai_builder.tools.vector_store import VectorStoreConfig, VectorStoreWriter
 from ai_builder.tools.web_search import WebSearchInput, WebSearchOutput, WebSearchTool
 
@@ -98,4 +104,8 @@ __all__ = [
     "WebSearchTool",
     "WebSearchInput",
     "WebSearchOutput",
+    "LocalFilesystemDataSource",
+    "S3DataSource",
+    "AzureBlobDataSource",
+    "GcsDataSource",
 ]

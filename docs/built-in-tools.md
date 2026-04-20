@@ -6,7 +6,7 @@ All tools live under **`ai_builder.tools`**. Import from the umbrella package:
 from ai_builder.tools import DocumentLoader, TextSplitter
 ```
 
-Heavy dependencies are **optional** — install **`ai-builder[docs]`**, **`[rag]`**, **`[llm]`**, **`[chroma]`**, **`[qdrant]`**, **`[search]`**, or bundles as needed.
+Heavy dependencies are **optional** — install **`ai-builder[docs]`**, **`[rag]`**, **`[embeddings-local]`**, **`[llm]`**, **`[faiss]`**, **`[chroma]`**, **`[qdrant]`**, **`data-s3`**, **`vector-opensearch`**, **`[search]`**, or bundles as needed.
 
 ---
 
@@ -14,9 +14,24 @@ Heavy dependencies are **optional** — install **`ai-builder[docs]`**, **`[rag]
 
 **`DocumentLoader`** walks a directory and dispatches per file extension into format-specific loaders (PDF, DOCX, TXT, MD, HTML, RTF, spreadsheets, JSON, XML, …).
 
-Optional parsers (PDF, Office, HTML, …) typically require **`ai-builder[docs]`** or manual installs (`pdfplumber`, `python-docx`, …).
+Optional parsers (PDF, Office, HTML, …) typically require **`ai-builder[docs]`** or granular extras (**`docs-pdf`**, **`docs-word`**, …).
 
 Granular loaders (PDF-only, Word-only, …) are exposed as separate classes — see **`ai-builder add`** and package **`ai_builder.tools.document_loader`**.
+
+---
+
+## Data sources (`ai_builder.tools.data_source`)
+
+Resolve **where documents live** before **`DocumentLoader`** runs:
+
+| Tool | Purpose |
+|------|---------|
+| **`LocalFilesystemDataSource`** | **`DATA_SOURCE_LOCAL_PATH`** must be an **absolute** directory (use for **EFS** when mounted). |
+| **`S3DataSource`**, **`MinioDataSource`**, **`CephRgwDataSource`** | Sync a bucket prefix to a temp dir (**`boto3`**; set **`DATA_SOURCE_S3_ENDPOINT_URL`** for MinIO/Ceph). |
+| **`AzureBlobDataSource`**, **`GcsDataSource`** | Sync blob prefix to a temp dir. |
+| **`GoogleDriveDataSource`**, **`OneDriveDataSource`** | Stub entry points — install **`data-gdrive`** / **`data-onedrive`** and implement OAuth in your app. |
+
+Imports: **`from ai_builder.tools import LocalFilesystemDataSource, S3DataSource`** (see **`ai_builder.tools.data_source`**).
 
 ---
 
@@ -30,7 +45,7 @@ Granular loaders (PDF-only, Word-only, …) are exposed as separate classes — 
 
 **`Embedder`** uses **sentence-transformers** when installed. Models are selectable via configuration / env (see **`EmbedderConfig`**).
 
-Requires optional **`sentence-transformers`** / **`ai-builder[rag]`**-style installs.
+Requires optional **`sentence-transformers`** (**`ai-builder[embeddings-local]`** or **`[rag]`**). For OpenAI embedding *client* workflows only: **`embeddings-openai`**.
 
 ---
 
@@ -40,15 +55,19 @@ Requires optional **`sentence-transformers`** / **`ai-builder[rag]`**-style inst
 
 | Provider | Notes |
 |----------|--------|
-| **faiss** | Local files under `store_path`; requires **`faiss-cpu`** (or similar). |
-| **chroma** | Remote or embedded Chroma client. |
-| **qdrant** | **`qdrant_url`** — requires **`qdrant-client`**. |
+| **faiss** | Local files under `store_path`; requires **`faiss-cpu`** (**`ai-builder[faiss]`**). |
+| **chroma** | HTTP client; **`chromadb`**. |
+| **qdrant** | **`qdrant_url`** — **`qdrant-client`**. |
+
+Optional **prebuilt tool instances**: **`ai_builder.tools.vector_store.faiss_tool`**, **`qdrant_tool`**, **`chroma_tool`** (each wraps **`VectorStoreWriter`** with a fixed provider).
+
+**Other backends** (OpenSearch, Milvus, Weaviate, Postgres+pgvector, Redis, LanceDB, Vald, …): install **`vector-opensearch`**, **`vector-milvus`**, etc., and wire your own indexing — **`Retriever`** / **`VectorStoreWriter`** only implement **faiss / chroma / qdrant** today.
 
 ---
 
 ## Retrieval
 
-**`Retriever`** queries the same backend types as the writer (FAISS / Chroma / Qdrant) using the configured embedding model.
+**`Retriever`** queries **FAISS / Chroma / Qdrant** using the configured embedding model. **`provider`** is a string — unsupported values fail at runtime with an explicit error until you add integration code.
 
 ---
 

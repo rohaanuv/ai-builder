@@ -38,7 +38,13 @@ def _run_uv(args: list[str], cwd: Path) -> bool:
         return False
 
 
-def _scaffold(template_name: str, project_name: str, output_dir: Path | None) -> None:
+def _scaffold(
+    template_name: str,
+    project_name: str,
+    output_dir: Path | None,
+    *,
+    rag_choices: object | None = None,
+) -> None:
     """Scaffold a project and auto-setup with uv (venv + install)."""
     from ai_builder.templates import TEMPLATE_REGISTRY
 
@@ -52,7 +58,10 @@ def _scaffold(template_name: str, project_name: str, output_dir: Path | None) ->
         raise typer.Exit(1)
 
     generator = TEMPLATE_REGISTRY[template_name]
-    generator(project_name, target)
+    kwargs: dict[str, object] = {}
+    if template_name == "rag" and rag_choices is not None:
+        kwargs["choices"] = rag_choices
+    generator(project_name, target, **kwargs)
     console.print(f"\n[bold green]✓[/bold green] Created [cyan]{project_name}[/cyan] at {target}")
 
     # --- uv-based environment setup ---
@@ -76,7 +85,7 @@ def _scaffold(template_name: str, project_name: str, output_dir: Path | None) ->
     console.print("[dim]Add packages as you need them:[/dim]")
     console.print("[dim]  uv pip install <package>[/dim]")
     console.print("[dim]  uv pip install -e \".[all]\"     # install all optional deps[/dim]")
-    console.print("[dim]See requirements.txt for the full list.[/dim]\n")
+    console.print("[dim]See requirements.txt (and pyproject optional extras).[/dim]\n")
 
 
 @create_app.command("tool")
@@ -110,9 +119,17 @@ def create_agent_deep(
 def create_rag(
     name: str = typer.Argument(help="Name of the RAG pipeline (e.g. doc-search)"),
     output_dir: Path | None = typer.Option(None, "--output", "-o", help="Parent directory"),
+    wizard: bool = typer.Option(
+        True,
+        "--wizard/--no-wizard",
+        help="Interactive prompts for LLM, embeddings, vector DB, and document formats",
+    ),
 ) -> None:
     """Create a RAG pipeline: load → split → embed → store → retrieve."""
-    _scaffold("rag", name, output_dir)
+    from ai_builder.commands.rag_wizard import prompt_rag_choices_optional
+
+    choices = prompt_rag_choices_optional(wizard)
+    _scaffold("rag", name, output_dir, rag_choices=choices)
 
 
 @create_app.command("pipeline")

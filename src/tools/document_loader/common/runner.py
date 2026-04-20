@@ -43,8 +43,19 @@ def run_loader(
             errors.append(f"{f.name}: {exc}")
             logger.warning("Failed to extract %s: %s", f, exc)
 
+    success = True
+    error: str | None = None
+    if errors and not docs:
+        success = False
+        max_show = 10
+        error = "; ".join(errors[:max_show])
+        if len(errors) > max_show:
+            error += f" ... ({len(errors)} errors total)"
+
     return LoaderOutput(
         data=docs,
+        success=success,
+        error=error,
         metadata={
             **inp.metadata,
             "file_count": len(docs),

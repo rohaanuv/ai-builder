@@ -49,6 +49,12 @@ Options:
 |--------|-------|---------|
 | `--output` | `-o` | Parent directory for the new folder (default: current working directory). |
 
+**`create rag`** additionally supports:
+
+| Option | Meaning |
+|--------|---------|
+| `--wizard` / `--no-wizard` | **Default:** run the interactive dependency wizard (data source, embeddings, vector DB, LLM, formats). **`--no-wizard`** skips prompts; generated **`requirements.txt`** contains core deps plus comment hints. |
+
 Behavior:
 
 - If **`uv`** is available, `create` may run **`uv venv .venv`** and **`uv pip install -e .`** inside the new project.

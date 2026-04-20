@@ -12,7 +12,8 @@ A **lightweight Python CLI framework** for building composable AI tools, agents,
 
 ```bash
 pip install "git+https://github.com/rohaanuv/ai-builder.git"
-ai-builder create rag my-project
+ai-builder create rag my-project              # interactive wizard (data source, vector DB, …)
+ai-builder create rag my-project --no-wizard   # skip prompts
 cd my-project && uv venv --python 3.13 .venv && uv pip install -e "."
 ```
 
@@ -30,6 +31,7 @@ src/                    # flat layout; import name ai_builder via package-dir in
 │   └── communication.py  # AgentBus, AgentMessage (A2A)
 ├── tools/             # Built-in reusable tool library (one package per tool)
 │   ├── document_loader/   # Document loaders: common/ + umbrella.py + loader_pdf/, loader_word/, …
+│   ├── data_source/   # Corpus location → local path or synced temp dir (S3, Azure Blob, GCS, …)
 │   ├── splitter/      # Recursive text chunking with IDs
 │   │   ├── __init__.py, main.py, config.py
 │   ├── embedder/      # sentence-transformers embeddings
@@ -43,7 +45,8 @@ src/                    # flat layout; import name ai_builder via package-dir in
 │       ├── __init__.py, main.py, config.py
 ├── tracing/           # Observability (Langfuse integration)
 ├── deploy/            # Dockerfile, docker-compose, K8s generators
-├── templates/         # 5 scaffold generators
+├── templates/         # 5 scaffold generators (+ rag_scaffold.py for pyproject/requirements/.env profiles)
+├── commands/rag_wizard.py  # Interactive extras selection for `create rag`
 ├── visualize/         # Mermaid.js flow diagram generation
 ├── commands/          # CLI command implementations
 └── cli.py             # Typer entry point

@@ -30,8 +30,8 @@ data/vectorstore/
 def register(name: str) -> Callable[[GeneratorFn], GeneratorFn]:
     """Decorator that registers a generator and wraps it to emit common files."""
     def decorator(fn: GeneratorFn) -> GeneratorFn:
-        def wrapper(project_name: str, target: Path) -> None:
-            fn(project_name, target)
+        def wrapper(project_name: str, target: Path, **kwargs: object) -> None:
+            fn(project_name, target, **kwargs)
             _write(target / ".python-version", _PYTHON_VERSION + "\n")
             _write(target / ".gitignore", _GITIGNORE)
         TEMPLATE_REGISTRY[name] = wrapper

@@ -59,8 +59,8 @@ def list_templates() -> None:
     )
     table.add_row(
         "create rag <name>",
-        "RAG pipeline (hello-world: loader + splitter only)",
-        "embeddings, faiss, docs, llm, chroma, qdrant, dev",
+        "RAG pipeline (wizard: embeddings, LLM, formats → requirements.txt)",
+        "embeddings-local, docs, llm-openai, faiss, …",
     )
     table.add_row(
         "create pipeline <name>",

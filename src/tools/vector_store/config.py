@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
 class VectorStoreConfig(BaseModel):
     """Configuration for the vector store."""
 
-    provider: Literal["faiss", "chroma", "qdrant"] = Field(
-        default="faiss", description="Vector database backend",
+    provider: str = Field(
+        default="faiss",
+        description="Backend id (faiss/chroma/qdrant implemented; others need custom wiring)",
     )
     store_path: str = Field(default="data/vectorstore", description="Local path for index files")
     collection_name: str = Field(default="default", description="Collection / index name")

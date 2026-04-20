@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal
-
 from pydantic import BaseModel, Field
 
 
 class RetrieverConfig(BaseModel):
     """Configuration for the retriever."""
 
-    provider: Literal["faiss", "chroma", "qdrant"] = Field(default="faiss")
+    provider: str = Field(
+        default="faiss",
+        description="Backend id (faiss/chroma/qdrant implemented in ai-builder)",
+    )
     store_path: str = Field(default="data/vectorstore")
     collection_name: str = Field(default="default")
     top_k: int = Field(default=5, ge=1, le=100)

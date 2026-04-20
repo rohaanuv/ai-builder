@@ -20,17 +20,28 @@ Python requirement for scaffolds: **≥ 3.13** (as written in generated `pyproje
 
 **Purpose:** Retrieval-oriented pipeline using **`ai_builder.tools`** (loader, splitter, embedder, vector store, retriever).
 
+**Interactive wizard (default):** On a TTY, **`ai-builder create rag <name>`** prompts for:
+
+1. **Data source** — local/EFS path, S3, Azure Blob, GCS, Google Drive / OneDrive (stubs), MinIO, Ceph RGW — updates **`requirements.txt`** with clients (**`boto3`**, **`azure-storage-blob`**, …) and fills **`DATA_SOURCE_*`** in **`.env.example`**.
+2. **Embeddings** — none / **`embeddings-local`** (sentence-transformers) / **`embeddings-openai`** (OpenAI client for custom flows).
+3. **Vector database** — none, FAISS, Qdrant, Chroma, or extended backends (OpenSearch, Milvus, Postgres+pgvector, …). **FAISS / Chroma / Qdrant** are implemented in **`VectorStoreWriter`** / **`Retriever`**; others install client libraries for your own indexing code.
+4. **LLM provider** — optional **`llm-openai`**, **`llm-anthropic`**, **`llm-bedrock`**, Azure (no extra wheel).
+5. **Document formats** — PDF, Word, slides, HTML, … (granular **`pdf`**, **`word`**, … extras).
+
+Use **`--no-wizard`** to skip prompts ( **`requirements.txt`** keeps only core deps + comments). Non-TTY stdin also skips the wizard.
+
 **Hello path:** **`DocumentLoader` | `TextSplitter`** only — runs without ML-heavy extras.
 
 **Notable generated paths (current generator):**
 
 - **`src/<pkg>/main.py`** — default **`ingest()`** demo.
-- **`app/full_rag.py`** — optional full chain after installing **`embeddings`**, **`faiss`** or **`qdrant`**, etc.
+- **`app/full_rag.py`** — optional full chain after installing **`embeddings-local`**, **`faiss`** or **`qdrant`**, etc.
+- **`src/tools/data_source/`** — re-exports **`ai_builder.tools.data_source`** for your ingestion stage.
 - **`src/<pkg>/workers/stage_runner.py`** — **`RAG_STAGE`** (`extract` / `chunk` / `embed`) for Kubernetes Jobs.
 - **`docker-compose.yml`** — may include a **Qdrant** sidecar when generated with that layout.
 - **`k8s/`** — namespace, PVCs, Qdrant deployment/service, Jobs; see **`k8s/README.md`** inside the generated project.
 
-**Configuration:** Copy **`.env.example`** → **`.env`**; install **`uv pip install -e "."`** before running scripts.
+**Configuration:** Copy **`.env.example`** → **`.env`**; install **`uv pip install -e "."`** (and profile extras from the printed **`uv pip install -e ".[…]"`** line) before running scripts.
 
 ---
 

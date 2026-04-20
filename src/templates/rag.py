@@ -3,6 +3,13 @@
 from pathlib import Path
 
 from ai_builder.templates import register, _to_snake, _write
+from ai_builder.templates.rag_scaffold import (
+    RagScaffoldChoices,
+    config_defaults_for_template,
+    render_dot_env_example,
+    render_pyproject_toml,
+    render_requirements_txt,
+)
 from ai_builder.deploy.generators import (
     generate_dockerfile,
     generate_docker_compose,
@@ -18,97 +25,14 @@ from ai_builder.deploy.generators import (
 
 
 @register("rag")
-def generate(name: str, target: Path) -> None:
+def generate(name: str, target: Path, *, choices: RagScaffoldChoices | None = None) -> None:
     pkg = _to_snake(name)
     cls = "".join(w.capitalize() for w in name.split("-"))
+    vp, ds, qu = config_defaults_for_template(choices)
 
-    _write(target / "pyproject.toml", f"""\
-[project]
-name = "{name}"
-version = "0.1.0"
-description = "RAG pipeline: {name}"
-requires-python = ">=3.13"
-dependencies = [
-    "ai-builder @ git+https://github.com/rohaanuv/ai-builder.git",
-    "pydantic>=2.0",
-    "langfuse>=2.0",
-]
-
-[project.optional-dependencies]
-notebook = ["ipykernel>=6.29"]
-embeddings = ["sentence-transformers>=3.3"]
-faiss = ["faiss-cpu>=1.9"]
-docs = [
-    "pdfplumber>=0.11",
-    "python-docx>=1.1",
-    "python-pptx>=1.0",
-    "beautifulsoup4>=4.12",
-    "striprtf>=0.0.26",
-    "openpyxl>=3.1",
-    "docx2txt>=0.8",
-]
-llm = ["openai>=1.0", "anthropic>=0.40"]
-chroma = ["chromadb>=0.5"]
-qdrant = ["qdrant-client>=1.12"]
-dev = ["pytest>=8.0"]
-all = ["{name}[notebook,embeddings,faiss,docs,llm,qdrant]"]
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[build-system]
-requires = ["setuptools>=75"]
-build-backend = "setuptools.build_meta"
-""")
-
-    _write(target / "requirements.txt", f"""\
-# Core (installed automatically)
-ai-builder @ git+https://github.com/rohaanuv/ai-builder.git
-pydantic>=2.0
-
-# Add packages as needed — install with: uv pip install <package>
-# Or install a group: uv pip install -e ".[embeddings]"
-#
-# Embeddings:      uv pip install sentence-transformers
-# Vector store:    uv pip install faiss-cpu
-# PDF support:     uv pip install pdfplumber
-# DOCX support:    uv pip install python-docx
-# DOC support:     uv pip install docx2txt
-# PPTX support:    uv pip install python-pptx
-# XLSX support:    uv pip install openpyxl
-# HTML parsing:    uv pip install beautifulsoup4
-# RTF support:     uv pip install striprtf
-# OpenAI LLM:     uv pip install openai
-# Anthropic LLM:  uv pip install anthropic
-# Optional: uv pip install -e ".[notebook]" for Jupyter kernels.
-# Chroma DB:      uv pip install chromadb
-# Qdrant DB:      uv pip install qdrant-client
-#
-# Or install all optional RAG extras: uv pip install -e ".[all]"
-""")
-
-    _write(
-        target / ".env.example",
-        f"""\
-# Copy to ".env" and adjust (never commit real secrets).
-# cp .env.example .env
-
-PROJECT_NAME={name}
-CHUNK_SIZE=1000
-CHUNK_OVERLAP=200
-LOG_LEVEL=INFO
-
-# Vector store (local compose uses Qdrant sidecar — see docker-compose.yml)
-VECTOR_PROVIDER=faiss
-QDRANT_URL=http://localhost:6333
-
-# Langfuse — traces from Tracer / configure_tracing_from_env()
-LANGFUSE_PUBLIC_KEY=
-LANGFUSE_SECRET_KEY=
-LANGFUSE_HOST=https://cloud.langfuse.com
-LANGFUSE_ENABLED=true
-""",
-    )
+    _write(target / "pyproject.toml", render_pyproject_toml(name, choices))
+    _write(target / "requirements.txt", render_requirements_txt(name, choices))
+    _write(target / ".env.example", render_dot_env_example(name, choices))
 
     # ── __init__.py ──
     # Lazy-load pipeline/ingest so ``python -m {pkg}.main`` does not import ``main`` twice
@@ -124,7 +48,7 @@ Quick start (works immediately — no extra packages needed):
 
 Full RAG (after installing extras):
 
-    uv pip install -e ".[embeddings,faiss]"
+    uv pip install -e ".[embeddings-local,faiss]"
     # See app/full_rag.py
 \"\"\"
 
@@ -179,7 +103,7 @@ It works immediately with zero optional packages.
 To build the full RAG pipeline (embed → store → retrieve → LLM),
 install the optional extras and see app/full_rag.py:
 
-    uv pip install -e ".[embeddings,faiss]"
+    uv pip install -e ".[embeddings-local,faiss]"
 \"\"\"
 
 from ai_builder.tools import DocumentLoader, TextSplitter
@@ -220,7 +144,7 @@ def ingest(source: str = "data/raw/") -> None:
 
         print()
         print("Next steps:")
-        print("  uv pip install -e \\".[embeddings,faiss]\\"   # add vector embeddings")
+        print("  uv pip install -e \\".[embeddings-local,faiss]\\"   # add vector embeddings")
         print("  python app/full_rag.py                     # run the full pipeline")
     finally:
         Tracer.flush()
@@ -249,9 +173,12 @@ class {cls}Config(BaseConfig):
     chunk_size: int = Field(default=1000, ge=50)
     chunk_overlap: int = Field(default=200, ge=0)
 
-    # Vector store — used by app/full_rag.py and Kubernetes embed Job
-    vector_provider: str = Field(default="faiss", description="faiss | chroma | qdrant")
-    qdrant_url: str = Field(default="http://localhost:6333")
+    # Data source — see ai_builder.tools.data_source and DATA_SOURCE_* in `.env`
+    data_source_type: str = Field(default="{ds}", description="local | efs | s3 | azure_blob | gcs | …")
+
+    # Vector store — faiss/chroma/qdrant implemented in ai-builder; others need custom indexing
+    vector_provider: str = Field(default="{vp}", description="VECTOR_PROVIDER")
+    qdrant_url: str = Field(default="{qu}")
 """)
 
     # ── sample data so first run produces output ──
@@ -308,10 +235,10 @@ Prerequisites (install the project and optional RAG extras)::
     cp .env.example .env
     uv venv .venv && source .venv/bin/activate
     uv pip install -e "."
-    uv pip install -e ".[embeddings,faiss]"
+    uv pip install -e ".[embeddings-local,faiss]"
 
     # Qdrant (e.g. ``docker compose up`` with the Qdrant service) instead of FAISS:
-    # uv pip install -e ".[embeddings,qdrant]"
+    # uv pip install -e ".[embeddings-local,qdrant]"
 
 Run::
 
@@ -408,7 +335,7 @@ steps:
     type: loader
     config:
       source: data/raw/
-      formats: [txt, md, pdf, docx, doc, pptx, html, htm, rtf, xlsx, csv, json, xml]
+      formats: [txt, md, pdf, docx, doc, pptx, html, htm, rtf, xlsx, xls, csv, json, xml, epub, odt]
   - name: splitter
     tool: splitter
     type: splitter
@@ -468,6 +395,7 @@ def test_pipeline_runs():
 Examples::
 
     from tools.document_loader import loader_pdf, DocumentLoader
+    from tools.data_source import LocalFilesystemDataSource
 """
 ''',
     )
@@ -515,6 +443,40 @@ __all__ = [
 ''',
     )
 
+    _write(
+        target / "src" / "tools" / "data_source" / "__init__.py",
+        '''\
+"""Optional re-exports — data corpus location (sync or path) before DocumentLoader.
+
+Examples::
+
+    from tools.data_source import LocalFilesystemDataSource, S3DataSource
+"""
+
+from ai_builder.tools.data_source import (
+    AzureBlobDataSource,
+    CephRgwDataSource,
+    GcsDataSource,
+    GoogleDriveDataSource,
+    LocalFilesystemDataSource,
+    MinioDataSource,
+    OneDriveDataSource,
+    S3DataSource,
+)
+
+__all__ = [
+    "LocalFilesystemDataSource",
+    "S3DataSource",
+    "MinioDataSource",
+    "CephRgwDataSource",
+    "AzureBlobDataSource",
+    "GcsDataSource",
+    "GoogleDriveDataSource",
+    "OneDriveDataSource",
+]
+''',
+    )
+
     # ── Kubernetes stage runner (Jobs: extract → chunk → embed) ──
     _write(
         target / "src" / pkg / "workers" / "__init__.py",
@@ -530,7 +492,7 @@ Stages write JSON checkpoints under ``data/staging/``:
 
 - **extract** — ``DocumentLoader`` → ``documents.json``
 - **chunk** — ``TextSplitter`` → ``chunks.json``
-- **embed** — ``Embedder`` | ``VectorStoreWriter`` → vector DB (needs ``.[embeddings,qdrant]`` or faiss extras)
+- **embed** — ``Embedder`` | ``VectorStoreWriter`` → vector DB (needs ``.[embeddings-local,qdrant]`` or faiss extras)
 
 Configure Langfuse via `.env` / ConfigMap so spans appear in Langfuse when keys are set.
 """
@@ -661,7 +623,7 @@ if __name__ == "__main__":
     # ── Deployment files ──
     _dockerfile = generate_dockerfile(name, pkg).replace(
         "RUN pip install --no-cache-dir -e .",
-        'RUN pip install --no-cache-dir -e ".[embeddings,qdrant]"',
+        'RUN pip install --no-cache-dir -e ".[embeddings-local,qdrant]"',
         1,
     )
     _write(target / "Dockerfile", _dockerfile)
@@ -710,11 +672,11 @@ Loads `data/raw/hello.md`, splits into chunks, prints a preview. Uses **Langfuse
 ## 3. Full pipeline (embeddings + vector store)
 
 ```bash
-uv pip install -e ".[embeddings,faiss]"
+uv pip install -e ".[embeddings-local,faiss]"
 python app/full_rag.py
 ```
 
-For **Qdrant** (matches `docker-compose` sidecar): `uv pip install -e ".[embeddings,qdrant]"` and set `VECTOR_PROVIDER=qdrant` in `.env`.
+For **Qdrant** (matches `docker-compose` sidecar): `uv pip install -e ".[embeddings-local,qdrant]"` and set `VECTOR_PROVIDER=qdrant` in `.env`.
 
 ## 4. Langfuse observability
 
@@ -739,8 +701,14 @@ Self-hosted Langfuse: set `LANGFUSE_HOST` to your instance URL.
 | Format | Extra |
 |--------|--------|
 | TXT, MD, CSV, JSON, XML | _(none)_ |
-| PDF | `uv pip install pdfplumber` or `-e ".[docs]"` |
-| DOCX / PPTX / HTML / RTF / XLSX | `-e ".[docs]"` |
+| PDF | `-e ".[pdf]"` or `-e ".[docs]"` |
+| DOCX / legacy Word | `-e ".[word]"` or `-e ".[docs]"` |
+| PPTX | `-e ".[slides]"` or `-e ".[docs]"` |
+| HTML | `-e ".[html]"` or `-e ".[docs]"` |
+| RTF | `-e ".[rtf]"` or `-e ".[docs]"` |
+| XLSX / XLS | `-e ".[spreadsheet]"` or `-e ".[docs]"` |
+| EPUB | `-e ".[epub]"` or `-e ".[docs]"` |
+| ODT | `-e ".[odt]"` or `-e ".[docs]"` |
 
 ## 6. Docker Compose
 
@@ -756,15 +724,24 @@ Manifests separate **data extraction**, **chunking**, **embedding/indexing**, an
 
 ## 8. Optional extras
 
+Granular installs (pick what you use):
+
 ```bash
-uv pip install -e ".[notebook]"    # Jupyter (ipykernel)
-uv pip install -e ".[embeddings]" # sentence-transformers
-uv pip install -e ".[faiss]"       # FAISS
-uv pip install -e ".[qdrant]"       # Qdrant client
-uv pip install -e ".[docs]"       # document parsers
-uv pip install -e ".[llm]"         # OpenAI + Anthropic (optional generation)
-uv pip install -e ".[all]"        # common optional stacks
+uv pip install -e ".[notebook]"
+uv pip install -e ".[embeddings-local]"   # sentence-transformers (built-in Embedder)
+uv pip install -e ".[embeddings-openai]" # openai — API embedding workflows (custom code)
+uv pip install -e ".[faiss]"
+uv pip install -e ".[qdrant]"
+uv pip install -e ".[pdf]"               # plus: word, slides, html, epub, odt, …
+uv pip install -e ".[docs]"              # all document parsers
+uv pip install -e ".[llm-openai]"       # OpenAI SDK — OpenAI / Ollama (`base_url`) / proxies
+uv pip install -e ".[llm-anthropic]"
+uv pip install -e ".[llm-bedrock]"
+uv pip install -e ".[llm]"               # openai + anthropic
+uv pip install -e ".[all]"
 ```
+
+After `ai-builder create rag`, `requirements.txt` lists packages for the profile you chose in the wizard (non-interactive: see comments there).
 
 ## Layout
 
@@ -777,7 +754,8 @@ uv pip install -e ".[all]"        # common optional stacks
 │   ├── config.py             # Settings (.env)
 │   └── workers/
 │       └── stage_runner.py   # Kubernetes Job stages
-├── src/tools/document_loader/# Thin re-exports from ai-builder
+├── src/tools/document_loader/
+├── src/tools/data_source/    # Thin re-exports from ai-builder
 ├── data/raw/hello.md
 ├── pipeline.yaml
 ├── tests/

@@ -45,8 +45,11 @@ Names vary per scaffold; consult your project’s **`README.md`** and **`config.
 | Logging | **`LOG_LEVEL`** |
 | Chunking | **`CHUNK_SIZE`**, **`CHUNK_OVERLAP`** |
 | Langfuse | **`LANGFUSE_PUBLIC_KEY`**, **`LANGFUSE_SECRET_KEY`**, **`LANGFUSE_HOST`**, **`LANGFUSE_ENABLED`** |
-| Vector DB | **`VECTOR_PROVIDER`**, **`QDRANT_URL`** |
+| Data source | **`DATA_SOURCE_TYPE`**, **`DATA_SOURCE_LOCAL_PATH`** (absolute; also for **EFS** mounts), **`DATA_SOURCE_S3_BUCKET`**, **`DATA_SOURCE_S3_PREFIX`**, **`DATA_SOURCE_S3_ENDPOINT_URL`** (MinIO/Ceph), **`AZURE_STORAGE_*`**, **`DATA_SOURCE_GCS_*`**, … |
+| Vector DB | **`VECTOR_PROVIDER`**, **`VECTOR_STORE_PATH`**, **`QDRANT_URL`**, **`CHROMA_HOST`**, **`OPENSEARCH_URL`**, **`MILVUS_URI`**, … |
 | LLMs | Provider-specific (`OPENAI_API_KEY`, …) |
+
+RAG projects created with **`ai-builder create rag`** ship an **`.env.example`** tailored to the wizard selections.
 
 ---
 

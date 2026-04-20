@@ -25,7 +25,8 @@ ai-builder list-templates
 Example: RAG pipeline named `my-search`:
 
 ```bash
-ai-builder create rag my-search
+ai-builder create rag my-search      # interactive wizard (extras + .env.example profile)
+# ai-builder create rag my-search --no-wizard
 cd my-search
 ```
 
@@ -64,11 +65,11 @@ This exercises the default pipeline (for RAG: document load + split) using sampl
 Install extras, then run the application script:
 
 ```bash
-uv pip install -e ".[embeddings,faiss]"
+uv pip install -e ".[embeddings-local,faiss]"
 python app/full_rag.py
 ```
 
-See [Templates – RAG](templates.md#rag-pipeline) and your project’s local `README.md`.
+Match extras to your wizard selections (see **`requirements.txt`** and the printed **`uv pip install -e ".[…]"`** line). See [Templates – create rag](templates.md#create-rag) and your project’s local **`README.md`**.
 
 ## 5. Optional: visualize the flow
 
