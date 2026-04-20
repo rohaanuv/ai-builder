@@ -25,25 +25,29 @@ from ai_builder.tools.embeddings.registry import EMBEDDING_EXTRA_BY_MODEL
 console = Console()
 
 
+def _embedding_model_ids_ordered() -> list[str]:
+    """Stable order — matches ``SUPPORTED_MODELS`` insertion order in ``embeddings.config``."""
+    return list(SUPPORTED_MODELS.keys())
+
+
 def _print_sentence_transformers_catalog() -> None:
-    """Always show full ST catalog before embedding mode choice (wizard UX)."""
-    models = list(SUPPORTED_MODELS.keys())
-    rows: list[str] = []
+    """Full ST catalog before embedding mode choice (same numbering as the picker step)."""
+    models = _embedding_model_ids_ordered()
+    rows = []
     for i, mid in enumerate(models, start=1):
         meta = SUPPORTED_MODELS[mid]
         ex = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
         rows.append(
-            f"  {i:2}  [cyan]{mid}[/cyan]  "
-            f"[dim]dim={meta['dim']}, max_seq={meta['max_seq']}[/dim]"
-            + (f"  [dim]│ uv:[/dim] [green]{ex}[/green]" if ex else ""),
+            f"  {i}. [cyan]{mid}[/cyan]  "
+            f"[dim](dim={meta['dim']}, max_seq={meta['max_seq']})[/dim]"
+            + (f"  [dim]uv:[/dim] [green]{ex}[/green]" if ex else ""),
         )
     body = (
-        "[bold]All sentence-transformers models[/bold] supported by "
-        "[cyan]ai_builder.tools.embeddings[/cyan]. "
-        "Pick one below if you choose [bold]local[/bold] embeddings.\n\n"
+        "[bold]Sentence-transformers models[/bold] ([cyan]ai_builder.tools.embeddings[/cyan]). "
+        "Same list appears again when you choose [bold]local[/bold] embeddings.\n\n"
         + "\n".join(rows)
     )
-    console.print(Panel.fit(body, title="Embedding models", border_style="cyan"))
+    console.print(Panel.fit(body, title="Embedding models — reference", border_style="cyan"))
 
 
 def _ask_data_source() -> DataSourceChoice:
@@ -90,31 +94,17 @@ def _ask_embedding() -> EmbeddingChoice:
 
 def _ask_embedding_model_id() -> str:
     """Pick a sentence-transformers model (``SUPPORTED_MODELS`` in ``embeddings.config``)."""
-    models = list(SUPPORTED_MODELS.keys())
+    models = _embedding_model_ids_ordered()
+    console.print()
+    console.print("[bold]Which embedding model are you using?[/bold]")
+    lo, hi = 1, len(models)
     console.print(
-        Panel.fit(
-            "[bold]Pick exactly one Hugging Face model[/bold] — your generated "
-            "[cyan]pyproject.toml[/cyan] gets a matching optional extra "
-            "(e.g. [green]embed-model-baai-bge-m3[/green]) so "
-            "[cyan]uv pip install -e \".[…]\"[/cyan] installs only that stack.\n\n"
-            "Same id is written to [cyan]EMBEDDING_MODEL_ID[/cyan] in [cyan].env.example[/cyan] "
-            "for [cyan]Embedder[/cyan] / [cyan]Retriever[/cyan].",
-            title="Local embeddings model",
-            border_style="magenta",
-        ),
-    )
-    console.print(
-        "\n[bold]Models[/bold] — [cyan]sentence-transformers[/cyan]\n",
+        f"[dim]Choose {lo}–{hi}. Saved as [cyan]EMBEDDING_MODEL_ID[/cyan] in [cyan].env.example[/cyan]; "
+        "matching [green]embed-model-…[/green] extra in [cyan]pyproject.toml[/cyan].[/dim]\n",
     )
     for i, mid in enumerate(models, start=1):
-        meta = SUPPORTED_MODELS[mid]
-        extra = EMBEDDING_EXTRA_BY_MODEL.get(mid, "")
-        extra_line = f"\n      [dim]uv extra:[/dim] [green]{extra}[/green]" if extra else ""
-        console.print(
-            f"  {i:2} = [cyan]{mid}[/cyan]{extra_line}\n"
-            f"      [dim]dim={meta['dim']}, max_seq={meta['max_seq']}[/dim]",
-        )
-    c = IntPrompt.ask("Embedding model", default=1, show_default=True)
+        console.print(f"  {i}. [cyan]{mid}[/cyan]")
+    c = IntPrompt.ask(f"Embedding model ({lo}–{hi})", default=1, show_default=True)
     idx = max(1, min(int(c), len(models))) - 1
     return models[idx]
 
